@@ -1,0 +1,29 @@
+{
+  "items": [
+    {
+      "id": 19,
+      "category": "HTF_REACTING_STOCKS",
+      "symbol": "AARTIDRUGS",
+      "company": "AARTI DRUGS LTD.",
+      "instrumentKey": "NSE_EQ|INE767A01016",
+      "logoUrl": "/api/dashboard/items/19/logo",
+      "isIndex": false,
+      "timeframe": "3M",
+      "zoneType": "DZ",
+      "low": 105.25,
+      "high": 144.8,
+      "formationTime": 1593541800,
+      "createdAt": "2026-10-15T06:43:10.962Z",
+      "updatedAt": "2026-10-15T06:43:10.962Z",
+      "cmp": 435.2,
+      "distancePercent": 66.72794117647058,
+      "distanceAbsolute": 290.4,
+      "position": "ABOVE",
+      "nearestBoundary": 144.8,
+      "status": "WATCHING",
+      "priceTimestamp": 1793298600,
+      "priceSource": "candle",
+      "priceState": "STALE"
+    }
+  ]
+}

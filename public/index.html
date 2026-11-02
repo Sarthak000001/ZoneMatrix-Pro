@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>ZoneMatrix Pro — Institutional Supply & Demand Analytics Terminal</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%25' stop-color='%232563eb'/><stop offset='100%25' stop-color='%2306b6d4'/></linearGradient></defs><rect width='100' height='100' rx='22' fill='url(%23g)'/><text y='67' x='14' font-size='50' fill='white' font-weight='800' font-family='sans-serif'>ZM</text></svg>">
+  <link rel="stylesheet" href="/css/original.css">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="brand-wrapper" title="ZoneMatrix Pro — Institutional Supply & Demand Terminal">
+      <div class="brand-logo">ZM</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="brand-title">ZoneMatrix Pro</span>
+        <span class="brand-tag">INSTITUTIONAL</span>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="main-nav">
+      <a href="?view=chart" class="nav-link active" data-view="chart">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
+        Chart
+      </a>
+      <a href="?view=zones" class="nav-link" data-view="zones">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m10 15 5-3-5-3v6z"/></svg>
+        Zone Distance
+      </a>
+      <a href="?view=confluence" class="nav-link" data-view="confluence">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        Confluence
+      </a>
+      <a href="?view=zone-watch" class="nav-link" data-view="zone-watch">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        Zone Watch
+      </a>
+      <a href="?view=dashboard" class="nav-link" data-view="dashboard">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+        Dashboard
+      </a>
+      <a href="?view=backtesting" class="nav-link" data-view="backtesting">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Backtesting
+      </a>
+      <a href="?view=operations" class="nav-link" data-view="operations">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4"/><path d="m4.93 4.93 2.83 2.83"/><path d="M2 12h4"/><path d="m4.93 19.07 2.83-2.83"/><path d="M12 18v4"/><path d="m16.24 16.24 2.83 2.83"/><path d="M18 12h4"/><path d="m16.24 7.76 2.83-2.83"/></svg>
+        Operations
+      </a>
+    </nav>
+
+    <!-- Meta / Session -->
+    <div class="header-meta">
+      <!-- Theme Switcher (Dark / Light Mode) -->
+      <button id="btn-theme-toggle" class="btn-theme-toggle" type="button" title="Switch between Dark and White theme" aria-label="Toggle Theme">
+        <svg id="icon-sun" class="theme-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+        <svg id="icon-moon" class="theme-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+        <span id="theme-text">Dark</span>
+      </button>
+
+      <div id="btn-upstox-status" class="status-pill" style="cursor:pointer" title="Click to configure Upstox API key">
+        <span id="upstox-status-dot" class="status-dot"></span>
+        <span id="upstox-status-text">Upstox: <b>Connect Key</b></span>
+      </div>
+      <div class="user-badge">
+        <div class="user-avatar">PM</div>
+        <span>pradyumn.m</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Areas -->
+  <main class="main-content">
+    
+    <!-- 1. CHART VIEW -->
+    <section id="view-chart" class="view-container active">
+      <div class="chart-view-layout">
+        <!-- Chart Toolbar -->
+        <div class="chart-toolbar">
+          <div class="tool-group">
+            <!-- Symbol Search -->
+            <div class="symbol-picker-box">
+              <svg class="symbol-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input type="text" id="symbol-input" class="symbol-input" placeholder="Search Symbol (e.g. COCHINSHIP)" autocomplete="off">
+              <div id="symbol-dropdown" class="symbol-dropdown"></div>
+            </div>
+
+            <!-- Timeframe Selector -->
+            <div class="timeframe-group">
+              <button class="tf-btn" data-tf="5m">5m</button>
+              <button class="tf-btn" data-tf="15m">15m</button>
+              <button class="tf-btn" data-tf="60m">60m</button>
+              <button class="tf-btn" data-tf="75m">75m</button>
+              <button class="tf-btn" data-tf="125m">125m</button>
+              <button class="tf-btn active" data-tf="1d">1D</button>
+              <button class="tf-btn" data-tf="1w">1W</button>
+              <button class="tf-btn" data-tf="1M">1M</button>
+              <button class="tf-btn" data-tf="3M">3M</button>
+            </div>
+
+            <!-- Quick Decision Score Filter -->
+            <div class="quick-filter-chip" title="Filter visible zones by Minimum Decision Score">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <span class="chip-label">Decision Score:</span>
+              <select id="chart-quick-decision-score" class="quick-select">
+                <option value="0">All Scores</option>
+                <option value="60">≥ 60 (Fair+)</option>
+                <option value="70">≥ 70 (Good+)</option>
+                <option value="75">≥ 75 (High)</option>
+                <option value="80" selected>≥ 80 (Prime 80+)</option>
+                <option value="85">≥ 85 (Exceptional 85+)</option>
+                <option value="90">≥ 90 (Ultra 90+)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Chart & Candle Controls -->
+          <div class="tool-group">
+            <div class="candle-tools-group">
+              <button id="btn-toggle-cmp" class="btn-icon-toggle active" title="Toggle Live CMP Laser Line">
+                <span class="laser-dot"></span> CMP
+              </button>
+              <button id="btn-toggle-hl" class="btn-icon-toggle active" title="Toggle Visible Range High / Low Extremes">
+                H / L
+              </button>
+              <button id="btn-toggle-grid" class="btn-icon-toggle active" title="Toggle Background Grid">
+                Grid
+              </button>
+            </div>
+
+            <button id="btn-chart-zoomin" class="btn-icon-text" title="Zoom In (+)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+              Zoom In
+            </button>
+            <button id="btn-chart-zoomout" class="btn-icon-text" title="Zoom Out (-)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+              Zoom Out
+            </button>
+            <button id="btn-chart-fit" class="btn-icon-text" title="Reset View / Fit to Screen">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+              Fit
+            </button>
+            <button id="btn-chart-options" class="btn-icon-text" title="Chart Options">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              Options
+            </button>
+          </div>
+        </div>
+
+        <!-- Chart Main Card -->
+        <div class="chart-main-card">
+          <div class="chart-header-bar">
+            <div id="chart-symbol-badge" class="chart-symbol-badge">
+              <span>COCHINSHIP</span>
+              <span class="brand-tag">1D</span>
+            </div>
+            <div id="chart-zones-badge" class="chart-zones-pill">
+              <span id="chart-zones-count" class="badge badge-perfect">Zones: 3 / 6 (Score ≥ 80)</span>
+            </div>
+            <div id="chart-legend-ohlc" class="chart-legend-ohlc">
+              <span>O: <b>-</b></span>
+              <span>H: <b>-</b></span>
+              <span>L: <b>-</b></span>
+              <span>C: <b>-</b></span>
+              <span>Vol: <b>-</b></span>
+            </div>
+          </div>
+          <div id="chart-container" class="chart-canvas-container"></div>
+        </div>
+      </div>
+
+      <!-- Zone Details Drawer -->
+      <aside id="zone-drawer" class="zone-drawer">
+        <div class="drawer-header">
+          <span class="drawer-title">Zone Details</span>
+          <button id="drawer-close" class="close-btn">&times;</button>
+        </div>
+
+        <!-- Badges & Quality -->
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+          <span id="drawer-badge-type" class="badge badge-demand">Demand (RBR)</span>
+          <span id="drawer-badge-quality" class="badge badge-perfect">PERFECT</span>
+        </div>
+
+        <!-- Score Banner -->
+        <div class="score-badge-large">
+          <div>
+            <div style="font-size:12px;color:var(--text-muted)">Formation Score</div>
+            <div id="drawer-score" class="score-val">84.2</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:12px;color:var(--text-muted)">Decision Score</div>
+            <div id="drawer-decision-score" class="score-val" style="color:#60a5fa">85.2</div>
+          </div>
+        </div>
+
+        <!-- Score Breakdown Breakdown -->
+        <h4 style="font-size:12px;text-transform:uppercase;color:var(--text-muted);margin:14px 0 8px">100-Point Score Components</h4>
+        <div class="breakdown-row"><span>Base Count (max 12):</span> <span id="drawer-comp-base">12.0</span></div>
+        <div class="breakdown-row"><span>Departure Strength (max 16):</span> <span id="drawer-comp-departure">16.0</span></div>
+        <div class="breakdown-row"><span>Leg-Out Range (max 14):</span> <span id="drawer-comp-legout">14.0</span></div>
+        <div class="breakdown-row"><span>Freshness (max 9):</span> <span id="drawer-comp-freshness">9.0</span></div>
+        <div class="breakdown-row"><span>Achievement (max 22):</span> <span id="drawer-comp-achievement">18.5</span></div>
+
+        <!-- Order Geometry -->
+        <h4 style="font-size:12px;text-transform:uppercase;color:var(--text-muted);margin:18px 0 8px">Trade Order Geometry</h4>
+        <div class="breakdown-row"><span>Entry (Proximal):</span> <span id="drawer-entry">₹1,120.00</span></div>
+        <div class="breakdown-row"><span>Stop Loss (Distal):</span> <span id="drawer-stop">₹1,095.00</span></div>
+        <div class="breakdown-row"><span>Target 1:</span> <span id="drawer-target">₹1,180.00</span></div>
+        <div class="breakdown-row"><span>Reward-to-Risk (R:R):</span> <span id="drawer-rr" style="color:var(--demand-green)">1 : 2.40</span></div>
+        <div class="breakdown-row"><span>Distance from CMP:</span> <span id="drawer-distance">1.25%</span></div>
+
+        <!-- Action Buttons -->
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px">
+          <button id="drawer-btn-watch" class="btn-primary" style="background:#059669">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            Add to Zone Watch
+          </button>
+          <button id="drawer-btn-dash" class="btn-icon-text" style="justify-content:center;padding:10px">
+            Add to Dashboard
+          </button>
+        </div>
+      </aside>
+
+      <!-- Chart Options Modal -->
+      <div id="options-modal" class="modal-overlay">
+        <div class="modal-box">
+          <div class="modal-header">
+            <span class="modal-title">Chart & Detector Options</span>
+            <button id="options-close" class="close-btn">&times;</button>
+          </div>
+          
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div>
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:8px">Detector Engine</label>
+              <div style="display:flex;gap:16px">
+                <label style="font-size:13px;display:flex;align-items:center;gap:6px">
+                  <input type="radio" name="opt-detector" value="v3" checked> V3 (Structure-first preview)
+                </label>
+                <label style="font-size:13px;display:flex;align-items:center;gap:6px">
+                  <input type="radio" name="opt-detector" value="v2"> V2 (Current production rules)
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:8px">Zone Side</label>
+              <div style="display:flex;gap:16px">
+                <label style="font-size:13px;display:flex;align-items:center;gap:6px"><input type="radio" name="opt-side" value="all" checked> All</label>
+                <label style="font-size:13px;display:flex;align-items:center;gap:6px"><input type="radio" name="opt-side" value="demand"> Demand Only</label>
+                <label style="font-size:13px;display:flex;align-items:center;gap:6px"><input type="radio" name="opt-side" value="supply"> Supply Only</label>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:20px;flex-wrap:wrap">
+              <label style="font-size:13px;display:flex;align-items:center;gap:6px">
+                <input type="checkbox" id="opt-fresh-only" checked> Fresh Zones Only
+              </label>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:13px">Formation Score:</span>
+                <select id="opt-min-score" class="filter-select">
+                  <option value="">Off</option>
+                  <option value="50">50+</option>
+                  <option value="60">60+</option>
+                  <option value="70">70+</option>
+                  <option value="80">80+</option>
+                </select>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:13px;color:#60a5fa">Decision Score:</span>
+                <select id="opt-min-decision-score" class="filter-select">
+                  <option value="0">All</option>
+                  <option value="60">60+</option>
+                  <option value="70">70+</option>
+                  <option value="75">75+</option>
+                  <option value="80" selected>80+</option>
+                  <option value="85">85+</option>
+                  <option value="90">90+</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:8px">Moving Average Overlays</label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <label style="font-size:13px;display:flex;align-items:center;gap:6px"><input type="checkbox" id="opt-ema20"> 20 EMA (Blue)</label>
+                <label style="font-size:13px;display:flex;align-items:center;gap:6px"><input type="checkbox" id="opt-ema50"> 50 EMA (Orange)</label>
+                <label style="font-size:13px;display:flex;align-items:center;gap:6px"><input type="checkbox" id="opt-ema100"> 100 EMA (Purple)</label>
+                <label style="font-size:13px;display:flex;align-items:center;gap:6px"><input type="checkbox" id="opt-ema200"> 200 EMA (Yellow)</label>
+              </div>
+            </div>
+
+            <button id="options-apply" class="btn-primary" style="margin-top:10px">Apply Filters</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. ZONE DISTANCE REPORT -->
+    <section id="view-zones" class="view-container">
+      <div class="report-header">
+        <div>
+          <h2 class="page-title">Zone Distance Report</h2>
+          <p class="page-subtitle">Stocks closest to tradeable demand and supply zones with live order geometry & multi-timeframe alignment.</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <input type="text" id="zones-search-input" class="filter-input" placeholder="Search Symbol / Name / Sector..." style="width:220px">
+          <button id="zones-btn-build" class="btn-primary" style="padding:7px 14px;font-size:12px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+            Build Report
+          </button>
+          <button id="zones-btn-csv" class="btn-icon-text" style="padding:7px 12px;font-size:12px" title="Export as CSV">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Grid -->
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-label">Universe Scanned</span>
+          <span id="kpi-zones-scanned" class="kpi-value">497</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Tradeable Qualified</span>
+          <span id="kpi-zones-tradeable" class="kpi-value" style="color:var(--demand-green)">50</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Average Score</span>
+          <span id="kpi-zones-avg-score" class="kpi-value">84.5</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Active Timeframe</span>
+          <span id="kpi-zones-timeframe" class="kpi-value" style="color:#60a5fa">1D (Daily)</span>
+        </div>
+      </div>
+
+      <!-- Filters matching Source Component RC -->
+      <div class="filters-bar">
+        <div class="filter-item">
+          <span>Detector:</span>
+          <select id="zones-filter-detector" class="filter-select">
+            <option value="v2" selected>V2 — baseline</option>
+            <option value="v3">V3 — preview</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Timeframe:</span>
+          <select id="zones-filter-timeframe" class="filter-select">
+            <option value="1d" selected>1d (Daily)</option>
+            <option value="1w">1w (Weekly)</option>
+            <option value="1M">1M (Monthly)</option>
+            <option value="75m">75m (Intraday)</option>
+            <option value="15m">15m (Intraday)</option>
+            <option value="5m">5m (Intraday)</option>
+            <option value="60m">60m (Hourly)</option>
+            <option value="125m">125m</option>
+            <option value="240m">240m (4-Hour)</option>
+            <option value="3M">3M (Quarterly)</option>
+            <option value="6M">6M (Half-Year)</option>
+            <option value="1Y">1Y (Annual)</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Zone Side:</span>
+          <select id="zones-filter-side" class="filter-select">
+            <option value="all" selected>All (Demand + Supply)</option>
+            <option value="demand">Demand only (DZ)</option>
+            <option value="supply">Supply only (SZ)</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Max Distance:</span>
+          <select id="zones-filter-maxdist" class="filter-select">
+            <option value="100">All (100%)</option>
+            <option value="15">Within 15%</option>
+            <option value="10">Within 10%</option>
+            <option value="5" selected>Within 5%</option>
+            <option value="3">Within 3%</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Context:</span>
+          <select id="zones-filter-context" class="filter-select">
+            <option value="off" selected>Structural only</option>
+            <option value="rank">Aligned first</option>
+            <option value="aligned_only">Aligned only</option>
+          </select>
+        </div>
+        <div class="filter-item" id="zones-purpose-wrap">
+          <span>Purpose:</span>
+          <select id="zones-filter-purpose" class="filter-select">
+            <option value="MIT" selected>Monthly Income (MIT)</option>
+            <option value="WIT">Weekly Income (WIT)</option>
+            <option value="DIT">Daily Income (DIT)</option>
+            <option value="HIT">Hourly Income (HIT)</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Min Formation:</span>
+          <select id="zones-filter-minscore" class="filter-select">
+            <option value="0">Off (0)</option>
+            <option value="50">50+</option>
+            <option value="60">60+</option>
+            <option value="70">70+</option>
+            <option value="80" selected>80+</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Min Decision Score:</span>
+          <select id="zones-filter-mindecisionscore" class="filter-select">
+            <option value="0">Off</option>
+            <option value="50">50+</option>
+            <option value="60">60+</option>
+            <option value="70">70+</option>
+            <option value="75">75+</option>
+            <option value="80" selected>80+</option>
+            <option value="85">85+</option>
+            <option value="90">90+</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Universe:</span>
+          <select id="zones-filter-universe" class="filter-select">
+            <option value="all">All listed instruments</option>
+            <option value="nifty500" selected>Nifty 500</option>
+            <option value="nifty50">Nifty 50</option>
+            <option value="nifty100">Nifty 100</option>
+            <option value="niftyauto">Nifty Auto</option>
+            <option value="niftybank">Nifty Bank</option>
+            <option value="niftyit">Nifty IT</option>
+            <option value="niftymetal">Nifty Metal</option>
+            <option value="niftyenergy">Nifty Energy / Oil & Gas</option>
+            <option value="niftyfmcg">Nifty FMCG</option>
+            <option value="niftyhealthcare">Nifty Healthcare / Pharma</option>
+            <option value="niftyfinancialservices">Nifty Financial Services</option>
+            <option value="niftychemicals">Nifty Chemicals</option>
+            <option value="niftycapitalgoods">Nifty Capital Goods / Infra</option>
+          </select>
+        </div>
+        <label class="toggle-field compact" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);cursor:pointer;margin-top:2px">
+          <input type="checkbox" id="zones-filter-fresh" checked>
+          <span>Fresh zones</span>
+        </label>
+      </div>
+
+      <!-- Live Summary Line matching Source Component -->
+      <div class="report-summary-line">
+        <span>Settings: <strong id="zones-sum-settings" style="color:#70e5ba">Saved</strong></span>
+        <span>Status <strong id="zones-sum-status">Ready</strong></span>
+        <span>Scanned <strong id="zones-sum-scanned">497</strong></span>
+        <span>With data <strong id="zones-sum-withdata">496</strong></span>
+        <span>Rows <strong id="zones-sum-rows" style="color:#60a5fa">50</strong></span>
+        <span id="zones-sum-updated">Updated just now</span>
+        <span class="report-sort-hint">Sort: click a column; Shift/Ctrl/Cmd-click to sort</span>
+      </div>
+
+      <!-- Report Progress Slot (Build Progress Animation) -->
+      <div id="zones-progress-slot" style="display:none">
+        <div class="report-build-progress">
+          <div class="report-progress-copy">
+            <strong id="zones-progress-title">Building: 0 / 497 symbols (0%)</strong>
+            <span id="zones-progress-meta">With data 496 · Rows found 0</span>
+          </div>
+          <div class="report-progress-track">
+            <span id="zones-progress-bar" style="width:0%"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table matching Component LC with added Sector column -->
+      <div class="table-wrapper">
+        <table class="data-table zones-table">
+          <thead>
+            <tr>
+              <th data-sort="symbol" class="sortable-th">Stock ⬍</th>
+              <th data-sort="sector" class="sortable-th">Sector ⬍</th>
+              <th data-sort="side" class="sortable-th">Side ⬍</th>
+              <th data-sort="currentPrice" class="sortable-th">CMP ⬍</th>
+              <th data-sort="distancePercent" class="sortable-th">Distance ⬍</th>
+              <th data-sort="zoneBottom" class="sortable-th">Zone ⬍</th>
+              <th data-sort="score" class="sortable-th">Score ⬍</th>
+              <th data-sort="decisionScore" class="sortable-th">Decision ⬍</th>
+              <th data-sort="riskReward" class="sortable-th">R:R ⬍</th>
+              <th data-sort="legOutTime" class="sortable-th">Origin ⬍</th>
+              <th data-sort="oppositeZoneNearestDistancePercent" class="sortable-th">Opposite Zone ⬍</th>
+              <th data-sort="htfReactionSortRank" class="sortable-th">HTF Reaction ⬍</th>
+              <th data-sort="htfVerdictRank" class="sortable-th">Context ⬍</th>
+              <th data-sort="movingAverageSortDistance" class="sortable-th">Moving Averages ⬍</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="zones-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 3. ZONE CONFLUENCE REPORT -->
+    <section id="view-confluence" class="view-container">
+      <div class="report-header">
+        <div>
+          <h2 class="page-title">Zone Confluence Report</h2>
+          <p class="page-subtitle">Lower timeframe zones overlapping higher timeframe decision areas.</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <input type="text" id="conf-search-input" class="filter-input" placeholder="Search Symbol / Name..." style="width:200px">
+          <button id="conf-btn-build" class="btn-primary" style="padding:7px 14px;font-size:12px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+            Build Report
+          </button>
+          <button id="conf-btn-csv" class="btn-icon-text" style="padding:7px 12px;font-size:12px" title="Export as CSV">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            CSV
+          </button>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-label">Confluence Rows</span>
+          <span id="kpi-conf-count" class="kpi-value" style="color:#60a5fa">18</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Purpose Preset</span>
+          <span id="kpi-conf-purpose" class="kpi-value" style="font-size:18px">Monthly Income (MIT)</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Timeframe Stack</span>
+          <span id="kpi-conf-stack" class="kpi-value" style="font-size:18px">1M / 1W / 1D</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Avg Decision Score</span>
+          <span id="kpi-conf-avg-score" class="kpi-value" style="color:var(--demand-green)">92.4</span>
+        </div>
+      </div>
+
+      <!-- Confluence Filters Bar -->
+      <div class="filters-bar" style="margin-bottom:12px;flex-wrap:wrap">
+        <div class="filter-item">
+          <span>Detector:</span>
+          <select id="conf-filter-detector" class="filter-select">
+            <option value="v2">V2 — baseline</option>
+            <option value="v3">V3 — preview</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Universe:</span>
+          <select id="conf-filter-universe" class="filter-select">
+            <option value="all">All loaded NSE</option>
+            <option value="nifty500" selected>Nifty 500</option>
+            <option value="nifty50">Nifty 50</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Purpose:</span>
+          <select id="conf-filter-purpose" class="filter-select">
+            <option value="MIT" selected>Monthly Income (1M/1W/1D)</option>
+            <option value="WIT">Weekly Income (1W/1D/75m)</option>
+            <option value="DIT">Daily Income (1D/75m/15m)</option>
+            <option value="HIT">Hourly Income (75m/15m/5m)</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Zone Type:</span>
+          <select id="conf-filter-zonetype" class="filter-select">
+            <option value="all" selected>All (DZ + SZ)</option>
+            <option value="demand">Demand (DZ)</option>
+            <option value="supply">Supply (SZ)</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Context:</span>
+          <select id="conf-filter-context" class="filter-select">
+            <option value="off" selected>Structural only</option>
+            <option value="rank">Aligned first</option>
+            <option value="aligned_only">Aligned only</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Coincidence:</span>
+          <select id="conf-filter-coincidence" class="filter-select">
+            <option value="all" selected>All Overlaps</option>
+            <option value="full">Full Overlap (100%)</option>
+            <option value="partial">Partial Overlap</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Min Decision Score:</span>
+          <select id="conf-filter-mindecisionscore" class="filter-select">
+            <option value="0" selected>Off</option>
+            <option value="50">50+</option>
+            <option value="60">60+</option>
+            <option value="70">70+</option>
+            <option value="75">75+</option>
+            <option value="80">80+</option>
+            <option value="85">85+</option>
+            <option value="90">90+</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Min Overlap %:</span>
+          <select id="conf-filter-minoverlap" class="filter-select">
+            <option value="0" selected>Any (≥1%)</option>
+            <option value="25">≥ 25%</option>
+            <option value="50">≥ 50%</option>
+            <option value="75">≥ 75%</option>
+            <option value="100">100% (Inside HTF)</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Max Distance:</span>
+          <select id="conf-filter-maxdist" class="filter-select">
+            <option value="100">All</option>
+            <option value="15">Within 15%</option>
+            <option value="10" selected>Within 10%</option>
+            <option value="5">Within 5%</option>
+            <option value="3">Within 3%</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Min LTF:</span>
+          <select id="conf-filter-minltf" class="filter-select">
+            <option value="0">All</option>
+            <option value="48">48+ (Standard)</option>
+            <option value="70">70+</option>
+            <option value="78" selected>78+ (Tradeable)</option>
+            <option value="85">85+</option>
+            <option value="90">90+</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Min HTF:</span>
+          <select id="conf-filter-minhtf" class="filter-select">
+            <option value="0">All</option>
+            <option value="48" selected>48+ (Standard)</option>
+            <option value="70">70+</option>
+            <option value="85">85+</option>
+          </select>
+        </div>
+        <label class="toggle-field compact" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);cursor:pointer;margin-top:2px">
+          <input type="checkbox" id="conf-filter-fresh" checked>
+          <span>Fresh zones</span>
+        </label>
+      </div>
+
+      <!-- Live Summary Line (Authentic Source Component) -->
+      <div class="report-summary-line">
+        <span>Settings: <strong id="conf-sum-settings" style="color:#70e5ba">Saved</strong></span>
+        <span>Status <strong id="conf-sum-status">Ready</strong></span>
+        <span>Scanned <strong id="conf-sum-scanned">497</strong></span>
+        <span>With data <strong id="conf-sum-withdata">490</strong></span>
+        <span>Rows <strong id="conf-sum-rows" style="color:#60a5fa">0</strong></span>
+        <span id="conf-sum-updated">Updated just now</span>
+        <span class="report-sort-hint">Sort: click a column; Shift/Ctrl/Cmd-click to add columns</span>
+      </div>
+
+      <!-- Report Progress Slot (Build Progress Animation) -->
+      <div id="conf-progress-slot" style="display:none">
+        <div class="report-build-progress">
+          <div class="report-progress-copy">
+            <strong id="conf-progress-title">Building: 0 / 497 symbols (0%)</strong>
+            <span id="conf-progress-meta">With data 490 · Rows found 0</span>
+          </div>
+          <div class="report-progress-track">
+            <span id="conf-progress-bar" style="width:0%"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Confluence Table matching component BC -->
+      <div class="table-wrapper">
+        <table class="data-table confluence-table">
+          <thead>
+            <tr>
+              <th data-sort="symbol" class="sortable-th">Stock ⬍</th>
+              <th data-sort="side" class="sortable-th">Side ⬍</th>
+              <th data-sort="coincidence" class="sortable-th">Coincidence ⬍</th>
+              <th>HTF Zone</th>
+              <th data-sort="htfScore" class="sortable-th">HTF Score ⬍</th>
+              <th>LTF Zone</th>
+              <th data-sort="ltfScore" class="sortable-th">LTF Score ⬍</th>
+              <th data-sort="decisionScore" class="sortable-th">Decision ⬍</th>
+              <th data-sort="overlapPercentOfLtf" class="sortable-th">LTF Overlap ⬍</th>
+              <th data-sort="ltfDistancePercent" class="sortable-th">Distance ⬍</th>
+              <th data-sort="riskReward" class="sortable-th">R:R ⬍</th>
+              <th data-sort="htfReactionSortRank" class="sortable-th">HTF Reaction ⬍</th>
+              <th data-sort="htfVerdictRank" class="sortable-th">Context ⬍</th>
+              <th data-sort="movingAverageSortDistance" class="sortable-th">Moving Averages ⬍</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="confluence-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 4. ZONE WATCH -->
+    <section id="view-zone-watch" class="view-container">
+      <div class="report-header">
+        <div>
+          <h2 class="page-title">Zone Watch</h2>
+          <p class="page-subtitle">Track saved demand and supply zones, touch tracking, and automated breakout alerts.</p>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-label">Total Active Watch</span>
+          <span id="kpi-watch-active" class="kpi-value">1</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Reacting Zones</span>
+          <span id="kpi-watch-reacting" class="kpi-value" style="color:var(--accent-purple)">1</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Watching Zones</span>
+          <span id="kpi-watch-watching" class="kpi-value" style="color:var(--accent-cyan)">0</span>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Side</th>
+              <th>Zone Boundaries</th>
+              <th>CMP</th>
+              <th>Distance</th>
+              <th>Touches</th>
+              <th>Priority</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="watch-table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 5. SETUP DASHBOARD -->
+    <section id="view-dashboard" class="view-container">
+      <div class="report-header">
+        <div>
+          <h2 class="page-title">Setup Dashboard</h2>
+          <p class="page-subtitle">High timeframe reactions, best execution stocks, and reacting market indices.</p>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="dashboard-column">
+          <div class="dashboard-col-title">
+            <span>HTF Reacting Stocks</span>
+            <span class="brand-tag">Priority</span>
+          </div>
+          <div id="dash-col-reacting" style="display:flex;flex-direction:column;gap:12px"></div>
+        </div>
+
+        <div class="dashboard-column">
+          <div class="dashboard-col-title">
+            <span>Best Execution Stocks</span>
+            <span class="brand-tag">Daily</span>
+          </div>
+          <div id="dash-col-execution" style="display:flex;flex-direction:column;gap:12px"></div>
+        </div>
+
+        <div class="dashboard-column">
+          <div class="dashboard-col-title">
+            <span>HTF Reacting Indices</span>
+            <span class="brand-tag">Macro</span>
+          </div>
+          <div id="dash-col-indices" style="display:flex;flex-direction:column;gap:12px"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. BACKTESTING -->
+    <section id="view-backtesting" class="view-container">
+      <div class="report-header">
+        <div>
+          <h2 class="page-title">Strategy Backtesting</h2>
+          <p class="page-subtitle">Historical replay and simulation of rule-based zone trading.</p>
+        </div>
+      </div>
+
+      <div class="filters-bar" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:14px">
+        <div class="filter-item">
+          <span>Universe:</span>
+          <select id="bt-input-universe" class="filter-select">
+            <option value="nifty500">Nifty 500</option>
+            <option value="nifty50">Nifty 50</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Timeframe:</span>
+          <select id="bt-input-tf" class="filter-select">
+            <option value="1d">1D (Daily)</option>
+            <option value="60m">60m</option>
+          </select>
+        </div>
+        <div class="filter-item">
+          <span>Capital (₹):</span>
+          <input type="number" id="bt-input-capital" class="filter-input" value="1000000">
+        </div>
+        <button id="btn-run-backtest" class="btn-primary">Run Backtest Simulation</button>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-label">Win Rate</span>
+          <span id="bt-win-rate" class="kpi-value" style="color:var(--demand-green)">64.8%</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Profit Factor</span>
+          <span id="bt-profit-factor" class="kpi-value">2.15</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Total Trades</span>
+          <span id="bt-trades-count" class="kpi-value">142</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Max Drawdown</span>
+          <span id="bt-drawdown" class="kpi-value" style="color:var(--supply-red)">6.8%</span>
+        </div>
+      </div>
+
+      <h3 style="font-size:15px;margin:20px 0 12px;font-weight:700">Simulated Trade History Log</h3>
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Signal Type</th>
+              <th>Entry Date</th>
+              <th>Entry Price</th>
+              <th>Exit Price</th>
+              <th>R Multiple</th>
+              <th>Net P&L</th>
+              <th>Outcome</th>
+            </tr>
+          </thead>
+          <tbody id="bt-trades-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 7. OPERATIONS -->
+    <section id="view-operations" class="view-container">
+      <div class="report-header">
+        <div>
+          <h2 class="page-title">Operations & System Health</h2>
+          <p class="page-subtitle">Provider connections, data synchronization, cache health, and background loaders.</p>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-label">Market Provider</span>
+          <span id="ops-provider-name" class="kpi-value" style="font-size:20px">Upstox</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Provider Status</span>
+          <span id="ops-provider-status" class="kpi-value" style="color:var(--demand-green);font-size:20px">CONFIGURED</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Sync Status</span>
+          <span id="ops-provider-sync" class="kpi-value" style="color:#60a5fa;font-size:20px">READY</span>
+        </div>
+      </div>
+
+      <div style="background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:20px">
+        <h4 style="font-size:14px;margin-bottom:12px;font-weight:700">System Activity Stream</h4>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.7;color:var(--text-muted)">
+          <div>[2026-10-31 09:10:11] Sync worker connected to Upstox environment. Market data status: ready.</div>
+          <div>[2026-10-31 09:10:12] Cache warm-up complete: 1,842 instruments indexed.</div>
+          <div>[2026-10-31 09:10:14] Zone Distance Report scheduled run finished: 497 symbols scanned.</div>
+          <div>[2026-10-31 09:10:15] Confluence scan completed for universe Nifty 500 (MIT preset). 18 active coincidences found.</div>
+          <div>[2026-10-31 09:10:18] Zone Watch real-time monitor listener active. 0 alert triggers pending.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Upstox API Settings Modal -->
+    <div id="upstox-modal" class="modal-overlay">
+      <div class="modal-box" style="max-width:540px">
+        <div class="modal-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:28px;height:28px;background:#6366f1;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:12px">UX</div>
+            <span class="modal-title">Connect Upstox API v2</span>
+          </div>
+          <button id="upstox-modal-close" class="close-btn">&times;</button>
+        </div>
+
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">
+          Connect your personal Upstox account to stream live market data, OHLCV candles, and real-time quotes directly from the National Stock Exchange (NSE).
+        </p>
+
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text-main);display:block;margin-bottom:6px">Upstox Access Token <span style="color:#ef4444">*</span></label>
+            <input type="password" id="input-upstox-token" class="symbol-input" placeholder="Paste your Upstox Access Token" style="padding-left:12px;font-family:'JetBrains Mono',monospace">
+          </div>
+
+          <div>
+            <label style="font-size:12px;font-weight:600;color:var(--text-main);display:block;margin-bottom:6px">Upstox API Key (Optional)</label>
+            <input type="text" id="input-upstox-apikey" class="symbol-input" placeholder="Your Upstox App API Key" style="padding-left:12px">
+          </div>
+
+          <div id="upstox-feedback-banner" style="display:none;padding:10px 14px;border-radius:var(--radius-md);font-size:12px"></div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+            <a href="https://developer.upstox.com/" target="_blank" style="font-size:12px;color:var(--primary);text-decoration:none">
+              Get Token from Upstox Developer &rarr;
+            </a>
+            <div style="display:flex;gap:10px">
+              <button id="btn-upstox-disconnect" class="btn-icon-text" style="display:none;color:#ef4444">Disconnect</button>
+              <button id="btn-upstox-connect" class="btn-primary">Test & Connect</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Engine Scripts -->
+  <script src="/js/v2-detector.js"></script>
+  <script src="/js/chart-engine.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

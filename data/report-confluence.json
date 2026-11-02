@@ -1,0 +1,35 @@
+{
+  "updatedAt": null,
+  "error": null,
+  "nseListed": 0,
+  "symbolsChecked": 0,
+  "symbolsWithHistory": 0,
+  "universe": "nifty500",
+  "universeLabel": "Nifty 500",
+  "reportStatus": "not_ready",
+  "purpose": "MIT",
+  "preset": {
+    "label": "Monthly Income Trade",
+    "htf": [
+      "1M"
+    ],
+    "itf": "1w",
+    "ltf": [
+      "1d"
+    ]
+  },
+  "freshOnly": true,
+  "minDecisionScore": null,
+  "minScore": 48,
+  "minLtfScore": 48,
+  "minHtfScore": 48,
+  "zoneType": "all",
+  "minOverlapPercent": 1,
+  "maxDistancePercent": 5,
+  "contextMode": "off",
+  "detectorVersion": "v2",
+  "confluenceCount": 0,
+  "rows": [],
+  "dataBasis": "raw",
+  "dataRevision": 0
+}

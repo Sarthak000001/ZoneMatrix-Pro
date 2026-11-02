@@ -1,0 +1,26 @@
+{
+  "name": "zonematrix-pro",
+  "version": "1.0.0",
+  "description": "ZoneMatrix Pro — Institutional Stock Analysis & Supply-Demand Zone Trading Terminal",
+  "main": "server.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs",
+    "token": "node get-token.mjs"
+  },
+  "keywords": [
+    "stock-analysis",
+    "supply-demand-zones",
+    "trading",
+    "nifty500",
+    "upstox",
+    "technical-analysis",
+    "algorithmic-trading"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "",
+  "license": "MIT"
+}

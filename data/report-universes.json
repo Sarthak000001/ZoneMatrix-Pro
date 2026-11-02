@@ -1,0 +1,164 @@
+{
+  "universes": [
+    {
+      "key": "nifty50",
+      "label": "Nifty 50"
+    },
+    {
+      "key": "nifty500",
+      "label": "Nifty 500"
+    },
+    {
+      "key": "nifty100",
+      "label": "Nifty 100"
+    },
+    {
+      "key": "niftyauto",
+      "label": "Nifty Auto"
+    },
+    {
+      "key": "niftybank",
+      "label": "Nifty Bank"
+    },
+    {
+      "key": "niftycapitalgoods",
+      "label": "Nifty Capital Goods"
+    },
+    {
+      "key": "niftycement",
+      "label": "Nifty Cement"
+    },
+    {
+      "key": "niftychemicals",
+      "label": "Nifty Chemicals"
+    },
+    {
+      "key": "niftycommercialtransport",
+      "label": "Nifty Commercial & Transport Services"
+    },
+    {
+      "key": "niftyconstruction",
+      "label": "Nifty Construction"
+    },
+    {
+      "key": "niftyconsumerdurables",
+      "label": "Nifty Consumer Durables"
+    },
+    {
+      "key": "niftyconsumerservices",
+      "label": "Nifty Consumer Services"
+    },
+    {
+      "key": "niftyfinancialservices",
+      "label": "Nifty Financial Services"
+    },
+    {
+      "key": "niftyfinancialservices2550",
+      "label": "Nifty Financial Services 25/50"
+    },
+    {
+      "key": "niftyfinancialservicesexbank",
+      "label": "Nifty Financial Services Ex Bank"
+    },
+    {
+      "key": "niftyfmcg",
+      "label": "Nifty FMCG"
+    },
+    {
+      "key": "niftyhealthcare",
+      "label": "Nifty Healthcare"
+    },
+    {
+      "key": "niftyhospitals",
+      "label": "Nifty Hospitals"
+    },
+    {
+      "key": "niftyhousingfinance",
+      "label": "Nifty Housing Finance"
+    },
+    {
+      "key": "niftyinsurance",
+      "label": "Nifty Insurance"
+    },
+    {
+      "key": "niftyit",
+      "label": "Nifty IT"
+    },
+    {
+      "key": "niftymedia",
+      "label": "Nifty Media"
+    },
+    {
+      "key": "niftymetal",
+      "label": "Nifty Metal"
+    },
+    {
+      "key": "niftynbfc",
+      "label": "Nifty NBFC"
+    },
+    {
+      "key": "niftyoilgas",
+      "label": "Nifty Oil and Gas"
+    },
+    {
+      "key": "niftypharma",
+      "label": "Nifty Pharma"
+    },
+    {
+      "key": "niftypower",
+      "label": "Nifty Power"
+    },
+    {
+      "key": "niftyprivatebank",
+      "label": "Nifty Private Bank"
+    },
+    {
+      "key": "niftypsubank",
+      "label": "Nifty PSU Bank"
+    },
+    {
+      "key": "niftyrealty",
+      "label": "Nifty Realty"
+    },
+    {
+      "key": "niftyreitsrealty",
+      "label": "Nifty REITs & Realty"
+    },
+    {
+      "key": "niftyretail",
+      "label": "Nifty Retail"
+    },
+    {
+      "key": "niftytelecommunications",
+      "label": "Nifty Telecommunications"
+    },
+    {
+      "key": "nifty500healthcare",
+      "label": "Nifty500 Healthcare"
+    },
+    {
+      "key": "niftymidsmallfinancialservices",
+      "label": "Nifty MidSmall Financial Services"
+    },
+    {
+      "key": "niftymidsmallhealthcare",
+      "label": "Nifty MidSmall Healthcare"
+    },
+    {
+      "key": "niftymidsmallittelecom",
+      "label": "Nifty MidSmall IT & Telecom"
+    },
+    {
+      "key": "nseindices",
+      "label": "All NSE Indices"
+    },
+    {
+      "key": "all",
+      "label": "All Stocks"
+    },
+    {
+      "key": "watchlist",
+      "label": "Watchlist (5)"
+    }
+  ]
+}
