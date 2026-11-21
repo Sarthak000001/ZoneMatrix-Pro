@@ -8,6 +8,9 @@
 *.css text eol=lf
 *.html text eol=lf
 *.md text eol=lf
+*.yml text eol=lf
+*.sh text eol=lf
+*.service text eol=lf
 
 # Binary files
 *.png binary

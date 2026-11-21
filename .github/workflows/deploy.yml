@@ -1,0 +1,41 @@
+# Deploys the latest main commit to the EC2 box.
+# Runs only when you push to main, or when you start it by hand in GitHub.
+#
+# One-time server setup: deploy/bootstrap-ec2.sh
+# Then register this repository's self-hosted runner on that instance
+# (GitHub → Settings → Actions → Runners → New self-hosted runner).
+# The runner keeps SSH closed. GitHub reaches the box over the runner's outbound connection.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - name: Check out the commit you pushed
+        uses: actions/checkout@v4
+
+      - name: Publish the app and restart it
+        run: |
+          set -eu
+          APP_DIR=/opt/zonematrix
+          sudo mkdir -p "$APP_DIR"
+          sudo rsync -a --delete \
+            --exclude '.git/' \
+            --exclude '.env' \
+            --exclude '_cache/' \
+            ./ "$APP_DIR"/
+          if [ ! -f "$APP_DIR/.env" ]; then
+            sudo cp "$APP_DIR/.env.example" "$APP_DIR/.env"
+            echo "Created $APP_DIR/.env from the example. Live Upstox data stays off until that file is filled in."
+          fi
+          sudo chown -R ubuntu:ubuntu "$APP_DIR"
+          sudo systemctl daemon-reload
+          sudo systemctl enable zonematrix
+          sudo systemctl restart zonematrix
+          sudo systemctl --no-pager --full status zonematrix
