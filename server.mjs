@@ -1,4 +1,5 @@
 import http from 'node:http';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -130,7 +131,34 @@ function parseBody(req) {
   });
 }
 
+function sameSecret(a, b) {
+  const left = crypto.createHash('sha256').update(String(a)).digest();
+  const right = crypto.createHash('sha256').update(String(b)).digest();
+  return crypto.timingSafeEqual(left, right);
+}
+
+function siteAccessAllowed(req) {
+  const password = process.env.SITE_PASSWORD || '';
+  if (!password) return true;
+  const expectedUser = process.env.SITE_USER || 'zonematrix';
+  const header = req.headers.authorization || '';
+  if (!header.startsWith('Basic ')) return false;
+  const decoded = Buffer.from(header.slice(6), 'base64').toString('utf8');
+  const sep = decoded.indexOf(':');
+  if (sep < 0) return false;
+  return sameSecret(decoded.slice(0, sep), expectedUser) && sameSecret(decoded.slice(sep + 1), password);
+}
+
 const server = http.createServer(async (req, res) => {
+  if (!siteAccessAllowed(req)) {
+    res.writeHead(401, {
+      'WWW-Authenticate': 'Basic realm="ZoneMatrix Pro"',
+      'Content-Type': 'text/plain; charset=utf-8'
+    });
+    res.end('Sign in required');
+    return;
+  }
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
