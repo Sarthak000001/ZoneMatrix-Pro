@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import './env.mjs';
 import { upstox } from './upstox-service.mjs';
+import { aggregateDaily, ensureDailyHistory, getSyncStatus, isIntradayTimeframe, startEquitySync } from './nse-history.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,6 +38,180 @@ function loadJson(relPath, defaultVal = {}) {
 }
 
 const instrumentsData = loadJson('_cache/instruments.json', { instruments: [] });
+const instrumentBySymbol = new Map();
+for (const inst of instrumentsData.instruments || []) {
+  if (inst.symbol) instrumentBySymbol.set(String(inst.symbol).toUpperCase(), inst);
+}
+
+const liveSyncState = {
+  status: 'idle',
+  lastSyncAt: null,
+  lastError: null,
+  quoteCount: 0,
+  log: []
+};
+
+function recordSync(status, message, quoteCount = 0) {
+  liveSyncState.status = status;
+  liveSyncState.lastSyncAt = new Date().toISOString();
+  liveSyncState.lastError = status === 'error' ? message : null;
+  liveSyncState.quoteCount = quoteCount;
+  liveSyncState.log.unshift({ at: liveSyncState.lastSyncAt, message });
+  if (liveSyncState.log.length > 8) liveSyncState.log.length = 8;
+}
+
+function isUpstoxInstrumentKey(key) {
+  return typeof key === 'string' && /\|IN[A-Z0-9]{5,}$/i.test(key);
+}
+
+function instrumentKeyFor(symbol, explicitKey) {
+  if (isUpstoxInstrumentKey(explicitKey)) return explicitKey;
+  const inst = instrumentBySymbol.get(String(symbol || '').toUpperCase());
+  return isUpstoxInstrumentKey(inst?.upstoxInstrumentKey) ? inst.upstoxInstrumentKey : null;
+}
+
+function asNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function livePriceMap(entries) {
+  const prices = new Map();
+  if (!upstox.config.accessToken) {
+    return { prices, source: 'snapshot' };
+  }
+
+  const keyToSymbol = new Map();
+  const keys = [];
+  for (const entry of entries) {
+    const symbol = String(entry.symbol || '').toUpperCase();
+    const key = instrumentKeyFor(symbol, entry.instrumentKey);
+    if (!symbol || !key || keyToSymbol.has(key)) continue;
+    keyToSymbol.set(key, symbol);
+    keyToSymbol.set(key.replace('|', ':'), symbol);
+    keys.push(key);
+  }
+
+  if (!keys.length) return { prices, source: 'snapshot' };
+
+  try {
+    for (let i = 0; i < keys.length; i += 40) {
+      const batch = keys.slice(i, i + 40);
+      const quotes = await upstox.getMarketQuotes(batch);
+      for (const [responseKey, quote] of Object.entries(quotes || {})) {
+        const symbol = keyToSymbol.get(responseKey) || keyToSymbol.get(responseKey.replace(':', '|'));
+        const ltp = asNumber(quote?.last_price);
+        if (symbol && ltp != null && ltp > 0) prices.set(symbol, ltp);
+      }
+    }
+    recordSync('live', `Live sync applied ${prices.size} quote${prices.size === 1 ? '' : 's'} to prices and zones.`, prices.size);
+    return { prices, source: prices.size ? 'upstox_live' : 'snapshot' };
+  } catch (err) {
+    recordSync('error', `Live sync failed: ${err.message}`, 0);
+    return { prices, source: 'snapshot' };
+  }
+}
+
+function withLiveZonePrice(row, cmp) {
+  if (!Number.isFinite(cmp) || cmp <= 0) return row;
+  const isDemand = row.zoneType === 'demand' || row.side === 'long';
+  const proximal = asNumber(row.proximal ?? row.entry ?? (isDemand ? row.zoneTop : row.zoneBottom));
+  const distal = asNumber(row.distal ?? row.stop ?? (isDemand ? row.zoneBottom : row.zoneTop));
+  const next = {
+    ...row,
+    currentPrice: cmp,
+    cmp,
+    priceSource: 'upstox_live',
+    priceState: 'LIVE',
+    latestTime: Math.floor(Date.now() / 1000)
+  };
+  if (proximal == null || distal == null) return next;
+
+  const top = Math.max(proximal, distal);
+  const bottom = Math.min(proximal, distal);
+  let freshnessState = row.freshnessState;
+  if (isDemand && cmp < distal) freshnessState = 'broken_by_close';
+  else if (!isDemand && cmp > distal) freshnessState = 'broken_by_close';
+  else if (cmp >= bottom && cmp <= top && freshnessState === 'fresh') freshnessState = 'tested_by_wick';
+
+  next.distance = +((cmp - proximal).toFixed(2));
+  next.distancePercent = +((Math.abs(cmp - proximal) / cmp) * 100).toFixed(2);
+  next.freshnessState = freshnessState;
+  return next;
+}
+
+function withLiveConfluencePrice(row, cmp) {
+  if (!Number.isFinite(cmp) || cmp <= 0) return row;
+  const isDemand = row.zoneType === 'demand' || row.side === 'long';
+  const ltfProx = asNumber(isDemand ? row.ltfZoneTop : row.ltfZoneBottom);
+  const ltfDist = asNumber(isDemand ? row.ltfZoneBottom : row.ltfZoneTop);
+  const htfProx = asNumber(isDemand ? row.htfZoneTop : row.htfZoneBottom);
+  let freshnessState = row.freshnessState;
+  if (ltfProx != null && ltfDist != null) {
+    if (isDemand && cmp < ltfDist) freshnessState = 'broken_by_close';
+    else if (!isDemand && cmp > ltfDist) freshnessState = 'broken_by_close';
+  }
+  const next = {
+    ...row,
+    currentPrice: cmp,
+    priceSource: 'upstox_live',
+    priceState: 'LIVE',
+    freshnessState
+  };
+  if (ltfProx) next.ltfDistancePercent = +((Math.abs(cmp - ltfProx) / cmp) * 100).toFixed(2);
+  if (htfProx) next.htfDistancePercent = +((Math.abs(cmp - htfProx) / cmp) * 100).toFixed(2);
+  return next;
+}
+
+function applyLiveZoneState(zone, cmp) {
+  const low = asNumber(zone.low);
+  const high = asNumber(zone.high);
+  if (low == null || high == null || !Number.isFinite(cmp) || cmp <= 0) return zone;
+  const isDemand = zone.zoneType === 'DZ' || zone.zoneType === 'demand';
+  const proximal = isDemand ? high : low;
+  const distal = isDemand ? low : high;
+  const inside = cmp >= low && cmp <= high;
+  if (inside && !zone.lastInside) {
+    zone.touchCount = (zone.touchCount || 0) + 1;
+    zone.reactionActive = true;
+    zone.lastTouchedAt = new Date().toISOString();
+  }
+  zone.lastInside = inside;
+
+  let status = 'WATCHING';
+  if (isDemand ? cmp < distal : cmp > distal) status = 'BROKEN';
+  else if (inside) status = 'IN_ZONE';
+  else if ((zone.touchCount || 0) >= 1 && zone.reactionActive && (isDemand ? cmp > high : cmp < low)) status = 'REACTING';
+  else if ((Math.abs(cmp - proximal) / cmp) * 100 <= 2) status = 'NEAR';
+
+  zone.cmp = cmp;
+  zone.status = status;
+  zone.marketStatus = status;
+  zone.position = cmp > high ? 'ABOVE' : cmp < low ? 'BELOW' : 'INSIDE';
+  zone.nearestBoundary = Math.abs(cmp - high) <= Math.abs(cmp - low) ? high : low;
+  zone.distanceAbsolute = +Math.abs(cmp - proximal).toFixed(2);
+  zone.distancePercent = +((Math.abs(cmp - proximal) / cmp) * 100).toFixed(2);
+  zone.priceSource = 'upstox_live';
+  zone.priceState = 'LIVE';
+  zone.dataAvailability = 'LIVE';
+  zone.lastObservedPrice = cmp;
+  zone.updatedAt = new Date().toISOString();
+  zone.lastObservedAt = zone.updatedAt;
+  return zone;
+}
+
+async function refreshTrackedZones(zones) {
+  const { prices, source } = await livePriceMap(zones || []);
+  if (source !== 'upstox_live') return { source, updated: 0 };
+  let updated = 0;
+  for (const zone of zones || []) {
+    const cmp = prices.get(String(zone.symbol || '').toUpperCase());
+    if (cmp == null) continue;
+    applyLiveZoneState(zone, cmp);
+    updated += 1;
+  }
+  return { source, updated };
+}
 const universesData = loadJson('_cache/report-universes.json', { universes: [] });
 const demandReportData = loadJson('_cache/report-zones-demand.json', { rows: [] });
 const supplyReportData = loadJson('_cache/report-zones-supply.json', { rows: [] });
@@ -108,6 +283,8 @@ const MIME_TYPES = {
 function sendJson(res, statusCode, data) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+    'Pragma': 'no-cache',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-CSRF-Token',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
@@ -270,39 +447,53 @@ const server = http.createServer(async (req, res) => {
       const symbol = (parsedUrl.searchParams.get('symbol') || 'COCHINSHIP').toUpperCase();
       const timeframe = parsedUrl.searchParams.get('timeframe') || '1d';
       
-      // If Upstox token is active, try fetching live candles from Upstox API
-      if (upstox.config.accessToken) {
-        const inst = (instrumentsData.instruments || []).find(i => i.symbol && i.symbol.toUpperCase() === symbol);
-        const upstoxKey = inst?.upstoxInstrumentKey || (symbol.startsWith('NSE_EQ|') ? symbol : `NSE_EQ|${symbol}`);
+      const upstoxKey = instrumentKeyFor(symbol);
+      if (upstox.config.accessToken && upstoxKey) {
         try {
           const liveCandles = await upstox.getCandles(upstoxKey, timeframe);
           if (liveCandles && liveCandles.length > 0) {
+            const last = liveCandles[liveCandles.length - 1];
+            recordSync('live', `${symbol} ${timeframe} synced. Last ${last.close} at ${new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}.`, 1);
             return sendJson(res, 200, {
               symbol,
               timeframe,
               candles: liveCandles,
               source: 'upstox_live',
-              count: liveCandles.length
+              count: liveCandles.length,
+              lastPrice: last.close,
+              syncedAt: new Date().toISOString()
             });
           }
         } catch (upstoxErr) {
-          console.warn(`Upstox fetch failed for ${symbol}: ${upstoxErr.message}. Falling back to cache.`);
+          recordSync('error', `Upstox fetch failed for ${symbol}: ${upstoxErr.message}`, 0);
+          console.warn(`Upstox fetch failed for ${symbol}: ${upstoxErr.message}. Using NSE daily history.`);
         }
       }
 
-      if (candleCache[symbol]) {
-        return sendJson(res, 200, candleCache[symbol]);
+      if (isIntradayTimeframe(timeframe)) {
+        return sendJson(res, 200, {
+          symbol,
+          timeframe,
+          candles: [],
+          source: 'unavailable',
+          error: 'Intraday bars need an Upstox token. Daily, weekly, and monthly history is available for every NSE stock.',
+          syncedAt: null
+        });
       }
 
-      // Try looking up in _cache or data/
-      const cData = loadJson(`_cache/candles-${symbol}-1d.json`, null);
-      if (cData) {
-        candleCache[symbol] = cData;
-        return sendJson(res, 200, cData);
-      }
-
-      // If symbol not in pre-extracted cache, fallback to COCHINSHIP
-      return sendJson(res, 200, candleCache['COCHINSHIP'] || { candles: [] });
+      const history = await ensureDailyHistory(symbol);
+      const candles = aggregateDaily(history.candles, timeframe) || [];
+      const last = candles[candles.length - 1];
+      return sendJson(res, 200, {
+        symbol,
+        timeframe,
+        candles,
+        source: history.source,
+        count: candles.length,
+        lastPrice: last?.close ?? null,
+        syncedAt: history.fetchedAt,
+        error: candles.length ? null : (history.error || `No daily history for ${symbol}`)
+      });
     }
 
 
@@ -478,6 +669,14 @@ const server = http.createServer(async (req, res) => {
         return adapted;
       });
 
+      const zoneQuote = await livePriceMap(enrichedRows);
+      if (zoneQuote.source === 'upstox_live') {
+        enrichedRows = enrichedRows.map(r => {
+          const cmp = zoneQuote.prices.get(String(r.symbol || '').toUpperCase());
+          return cmp == null ? r : withLiveZonePrice(r, cmp);
+        });
+      }
+
       // Universe filtering
       if (universe !== 'all' && universe !== 'nifty500') {
         const u = universe.toLowerCase();
@@ -566,6 +765,8 @@ const server = http.createServer(async (req, res) => {
         contextMode,
         detectorVersion,
         zoneCount: enrichedRows.length,
+        priceSource: zoneQuote.source,
+        syncedAt: new Date().toISOString(),
         rows: enrichedRows
       });
     }
@@ -607,6 +808,14 @@ const server = http.createServer(async (req, res) => {
         }
         return r;
       });
+
+      const confluenceQuote = await livePriceMap(rows);
+      if (confluenceQuote.source === 'upstox_live') {
+        rows = rows.map(r => {
+          const cmp = confluenceQuote.prices.get(String(r.symbol || '').toUpperCase());
+          return cmp == null ? r : withLiveConfluencePrice(r, cmp);
+        });
+      }
 
       if (zoneType !== 'all') {
         rows = rows.filter(r => (r.zoneType || r.side) === zoneType);
@@ -653,6 +862,8 @@ const server = http.createServer(async (req, res) => {
         symbolsWithHistory: 490,
         reportStatus: "ready",
         updatedAt: new Date().toISOString(),
+        priceSource: confluenceQuote.source,
+        syncedAt: new Date().toISOString(),
         rows
       });
     }
@@ -690,7 +901,10 @@ const server = http.createServer(async (req, res) => {
         activeWatchZones.unshift(newZone);
         return sendJson(res, 201, { success: true, zone: newZone });
       }
+      const watchSync = await refreshTrackedZones(activeWatchZones);
       return sendJson(res, 200, {
+        priceSource: watchSync.source,
+        syncedAt: new Date().toISOString(),
         zones: activeWatchZones,
         monitorStatus: "Live connected",
         summary: {
@@ -727,16 +941,28 @@ const server = http.createServer(async (req, res) => {
         activeDashboardItems.push(newItem);
         return sendJson(res, 201, { success: true, item: newItem });
       }
-      return sendJson(res, 200, { items: activeDashboardItems });
+      const dashSync = await refreshTrackedZones(activeDashboardItems);
+      return sendJson(res, 200, {
+        items: activeDashboardItems,
+        priceSource: dashSync.source,
+        syncedAt: new Date().toISOString()
+      });
     }
 
     // 13. Loader health & Operations
     if (pathname === '/api/loader/health') {
+      const connected = !!upstox.config.accessToken;
+      const nseSync = getSyncStatus();
       return sendJson(res, 200, {
-        state: "configured",
-        source: "environment",
-        syncStatus: "ready",
-        provider: "Upstox",
+        state: connected ? "configured" : (nseSync.running ? "syncing" : "ready"),
+        source: connected ? "upstox" : "nse",
+        syncStatus: nseSync.running ? "syncing" : (connected ? (liveSyncState.status === 'idle' ? 'live' : liveSyncState.status) : (nseSync.saved ? 'ready' : 'cached')),
+        provider: connected ? "Upstox" : "NSE",
+        lastSyncAt: liveSyncState.lastSyncAt || nseSync.finishedAt || nseSync.startedAt,
+        quoteCount: liveSyncState.quoteCount,
+        lastError: liveSyncState.lastError,
+        log: liveSyncState.log,
+        nseSync,
         updatedAt: new Date().toISOString()
       });
     }
@@ -813,6 +1039,15 @@ function startListening(port) {
   server.removeAllListeners('listening');
   server.listen(port, () => {
     console.log(`ZoneMatrix Pro Server running at http://localhost:${port}`);
+    const equities = (instrumentsData.instruments || [])
+      .filter(inst => inst.instrumentType === 'EQ' && inst.segment === 'NSE_EQ')
+      .map(inst => inst.symbol);
+    startEquitySync(equities, {
+      onProgress: (status) => {
+        console.log(status.message);
+        recordSync(status.running ? 'live' : 'ready', status.message, status.saved);
+      }
+    });
   });
 }
 

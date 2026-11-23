@@ -54,6 +54,32 @@
     await loadInstruments();
     parseUrlParams();
     await switchView(state.currentView, false);
+    startLiveSync();
+  }
+
+  let chartRequest = 0;
+  let liveSyncBusy = false;
+
+  function startLiveSync() {
+    window.setInterval(() => { refreshLiveView(); }, 10000);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) refreshLiveView();
+    });
+  }
+
+  async function refreshLiveView() {
+    if (liveSyncBusy || document.hidden) return;
+    liveSyncBusy = true;
+    try {
+      if (state.currentView === 'chart') await loadChartData({ live: true });
+      else if (state.currentView === 'zones') await loadZonesReport({ live: true });
+      else if (state.currentView === 'confluence') await loadConfluenceReport({ live: true });
+      else if (state.currentView === 'zone-watch') await loadZoneWatch();
+      else if (state.currentView === 'dashboard') await loadDashboard();
+      else if (state.currentView === 'operations') await loadOperations();
+    } finally {
+      liveSyncBusy = false;
+    }
   }
 
   // Theme Management (Dark & Light Mode)
@@ -503,26 +529,42 @@
   }
 
   // Load Chart Data
-  async function loadChartData() {
+  async function loadChartData(options = {}) {
+    const requestId = ++chartRequest;
+    const requestedSymbol = state.symbol;
+    const requestedTf = state.timeframe;
     elements.symbolInput.value = state.symbol;
 
     // 1. Fetch Candles
     let isLiveUpstox = false;
+    let candleSource = '';
+    let candleError = '';
     let candleCount = 0;
+    let syncedAt = null;
     try {
-      const candleRes = await fetch(`/api/candles?symbol=${state.symbol}&timeframe=${state.timeframe}&max=true&basis=raw`);
+      const candleRes = await fetch(`/api/candles?symbol=${requestedSymbol}&timeframe=${requestedTf}&max=true&basis=raw`, { cache: 'no-store' });
       const candleData = await candleRes.json();
+      if (requestId !== chartRequest || requestedSymbol !== state.symbol || requestedTf !== state.timeframe) return;
       state.candles = candleData.candles || [];
       candleCount = state.candles.length;
-      isLiveUpstox = candleData.source === 'upstox_live';
+      candleSource = candleData.source || '';
+      candleError = candleData.error || '';
+      isLiveUpstox = candleSource === 'upstox_live';
+      syncedAt = candleData.syncedAt || null;
     } catch (e) {
       console.error('Failed fetching candles:', e);
+      if (options.live && state.candles.length) return;
       state.candles = [];
     }
 
-    const liveBadge = isLiveUpstox 
-      ? `<span class="badge" title="Streaming live market data directly from Upstox API" style="background:rgba(16,185,129,0.18);color:#10b981;border:1px solid rgba(16,185,129,0.4);font-weight:700;display:inline-flex;align-items:center;gap:5px"><span class="laser-dot" style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block;box-shadow:0 0 6px #10b981"></span> LIVE UPSTOX (NSE)</span>`
-      : `<span class="badge" title="Viewing archived offline data" style="background:rgba(255,255,255,0.06);color:var(--text-muted)">CACHED ARCHIVE</span>`;
+    const syncClock = syncedAt
+      ? new Date(syncedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+      : '';
+    const liveBadge = isLiveUpstox
+      ? `<span class="badge" title="Live sync from Upstox. Price and zones refresh every 10 seconds." style="background:rgba(16,185,129,0.18);color:#10b981;border:1px solid rgba(16,185,129,0.4);font-weight:700;display:inline-flex;align-items:center;gap:5px"><span class="laser-dot" style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block;box-shadow:0 0 6px #10b981"></span> LIVE SYNC ${syncClock}</span>`
+      : candleSource === 'yahoo_nse'
+        ? `<span class="badge" title="Daily NSE history for this symbol" style="background:rgba(96,165,250,0.16);color:#60a5fa;border:1px solid rgba(96,165,250,0.35);font-weight:700">NSE HISTORY</span>`
+        : `<span class="badge" title="${candleError || 'No history for this symbol'}" style="background:rgba(255,255,255,0.06);color:var(--text-muted)">${candleError ? 'NO DATA' : 'SNAPSHOT'}</span>`;
 
     elements.chartSymbolBadge.innerHTML = `
       <span>${state.symbol}</span>
@@ -536,7 +578,7 @@
     state.zones = [];
     if (state.detectorVersion === 'v3' && !isLiveUpstox) {
       try {
-        const zoneRes = await fetch(`/api/zones/detect?symbol=${state.symbol}&timeframe=${state.timeframe}&version=v3`);
+        const zoneRes = await fetch(`/api/zones/detect?symbol=${state.symbol}&timeframe=${state.timeframe}&version=v3`, { cache: 'no-store' });
         const zoneData = await zoneRes.json();
         state.zones = zoneData.zones || [];
       } catch (e) {
@@ -554,6 +596,8 @@
       }
     }
 
+    if (requestId !== chartRequest || requestedSymbol !== state.symbol || requestedTf !== state.timeframe) return;
+
     // 3. Filter and Apply Zones
     const visibleZones = updateChartZones();
 
@@ -567,7 +611,14 @@
       state.chart.setTheme(activeTheme);
     }
 
-    state.chart.setData(state.candles, visibleZones);
+    if (options.live) state.chart.applyLiveUpdate(state.candles, visibleZones);
+    else state.chart.setData(state.candles, visibleZones);
+
+    if (state.selectedZone && elements.zoneDrawer.classList.contains('open')) {
+      const prev = state.selectedZone;
+      const match = state.zones.find(z => z.id === prev.id || (z.type === prev.type && z.startTime === prev.startTime && z.proximal === prev.proximal));
+      if (match) openZoneDrawer(match);
+    }
   }
 
   function updateChartZones() {
@@ -579,14 +630,14 @@
     }
     if (state.freshOnly) {
       const freshOnlyList = visibleZones.filter(z => z.freshnessState === 'fresh');
-      if (freshOnlyList.length > 0) visibleZones = freshOnlyList;
+      const stillActive = visibleZones.filter(z => z.freshnessState !== 'broken_by_close' && z.quality !== 'broken');
+      visibleZones = freshOnlyList.length ? freshOnlyList : stillActive;
     }
     if (state.minDecisionScore && state.minDecisionScore > 0) {
-      const scoreFiltered = visibleZones.filter(z => {
+      visibleZones = visibleZones.filter(z => {
         const ds = z.decisionScore != null ? z.decisionScore : z.score;
         return ds != null && ds >= state.minDecisionScore;
       });
-      if (scoreFiltered.length > 0) visibleZones = scoreFiltered;
     }
 
     // Sort by proximity to current market price so nearest actionable zones are shown
@@ -761,7 +812,7 @@
 
     try {
       const url = `/api/reports/zones?universe=${universe}&timeframe=${timeframe}&zoneType=${zoneType}&maxDistancePercent=${maxDist}&contextMode=${contextMode}&purpose=${purpose}&minScore=${minScore}&minDecisionScore=${minDecisionScore}&detectorVersion=${detectorVersion}&freshOnly=${freshOnly}&q=${encodeURIComponent(query)}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: 'no-store' });
       const data = await res.json();
       zonesDataRows = data.rows || [];
 
@@ -787,8 +838,8 @@
       if (sumWithData) sumWithData.textContent = data.symbolsWithHistory || '496';
       const sumUpdated = document.getElementById('zones-sum-updated');
       if (sumUpdated) {
-        const timeStr = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString() : 'just now';
-        sumUpdated.textContent = `Updated ${timeStr}`;
+        const timeStr = data.syncedAt || data.updatedAt ? new Date(data.syncedAt || data.updatedAt).toLocaleTimeString() : 'just now';
+        sumUpdated.textContent = data.priceSource === 'upstox_live' ? `Live sync ${timeStr}` : `Snapshot ${timeStr}`;
       }
 
       if (options.isBuild && progressSlot) {
@@ -1105,7 +1156,7 @@
 
     try {
       const url = `/api/reports/confluence?universe=${universe}&purpose=${purpose}&zoneType=${zoneType}&contextMode=${contextMode}&coincidence=${coincidence}&minDecisionScore=${minDec}&minOverlapPercent=${minOverlap}&maxDistancePercent=${maxDist}&minLtfScore=${minLtf}&minHtfScore=${minHtf}&detectorVersion=${detectorVersion}&freshOnly=${freshOnly}&q=${encodeURIComponent(query)}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: 'no-store' });
       const data = await res.json();
       confluenceDataRows = data.rows || [];
 
@@ -1130,8 +1181,8 @@
       if (sumWithData) sumWithData.textContent = data.symbolsWithHistory || '490';
       const sumUpdated = document.getElementById('conf-sum-updated');
       if (sumUpdated) {
-        const timeStr = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString() : 'just now';
-        sumUpdated.textContent = `Updated ${timeStr}`;
+        const timeStr = data.syncedAt || data.updatedAt ? new Date(data.syncedAt || data.updatedAt).toLocaleTimeString() : 'just now';
+        sumUpdated.textContent = data.priceSource === 'upstox_live' ? `Live sync ${timeStr}` : `Snapshot ${timeStr}`;
       }
 
       if (options.isBuild && progressSlot) {
@@ -1408,7 +1459,7 @@
   // Zone Watch
   async function loadZoneWatch() {
     try {
-      const res = await fetch('/api/zone-watch');
+      const res = await fetch('/api/zone-watch', { cache: 'no-store' });
       const data = await res.json();
       const zones = data.zones || [];
 
@@ -1480,7 +1531,7 @@
   // Dashboard Items
   async function loadDashboard() {
     try {
-      const res = await fetch('/api/dashboard/items');
+      const res = await fetch('/api/dashboard/items', { cache: 'no-store' });
       const data = await res.json();
       const items = data.items || [];
 
@@ -1617,11 +1668,27 @@
   // Operations
   async function loadOperations() {
     try {
-      const res = await fetch('/api/loader/health');
+      const res = await fetch('/api/loader/health', { cache: 'no-store' });
       const data = await res.json();
       document.getElementById('ops-provider-status').textContent = data.state?.toUpperCase() || 'CONFIGURED';
-      document.getElementById('ops-provider-sync').textContent = data.syncStatus?.toUpperCase() || 'READY';
+      const syncEl = document.getElementById('ops-provider-sync');
+      const syncStatus = (data.syncStatus || 'cached').toUpperCase();
+      syncEl.textContent = syncStatus;
+      syncEl.style.color = syncStatus === 'LIVE' ? '#10b981' : syncStatus === 'ERROR' ? '#ef4444' : '#60a5fa';
       document.getElementById('ops-provider-name').textContent = data.provider || 'Upstox';
+
+      const stream = document.getElementById('ops-activity-stream');
+      if (stream) {
+        const lines = (data.log && data.log.length)
+          ? data.log
+          : [{ at: data.updatedAt, message: data.syncStatus === 'cached'
+              ? 'Upstox is not connected. Prices and zones stay on the saved snapshot until a token is connected.'
+              : 'Live sync is waiting for the first quote.' }];
+        stream.innerHTML = lines.map(line => {
+          const stamp = line.at ? new Date(line.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false }) : '';
+          return `<div>[${stamp}] ${line.message}</div>`;
+        }).join('');
+      }
     } catch (e) {
       console.error('Failed to load operations health:', e);
     }

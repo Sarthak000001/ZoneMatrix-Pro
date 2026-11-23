@@ -229,7 +229,7 @@ window.ZoneEngine = (function() {
         const decisionScore = finalScore;
 
         zones.push({
-          id: `v2_zone_${zones.length + 1}`,
+          id: `v2_${isDemand ? 'd' : 's'}_${baseGroup[0].time}_${Math.round(proximal * 100)}`,
           detectorVersion: 'v2',
           type: isDemand ? 'demand' : 'supply',
           pattern,

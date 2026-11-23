@@ -147,6 +147,32 @@ class FinancialChart {
     }
   }
 
+  // Refresh candles and zones without snapping the viewport back to fit.
+  applyLiveUpdate(candles, zones = []) {
+    const followLive = (this.offsetIndex || 0) === 0;
+    const prevVisible = this.visibleCount;
+    const autoScale = this.autoPriceScale !== false;
+    this.candles = candles || [];
+    this.zones = zones || [];
+    this.calculateIndicators();
+    if (!this.candles.length) {
+      this.requestRender();
+      return;
+    }
+    if (!this.hasFitted) {
+      this.fitContent();
+      return;
+    }
+    this.visibleCount = Math.max(4, Math.min(this.candles.length, prevVisible));
+    if (followLive) this.offsetIndex = 0;
+    else this.offsetIndex = Math.max(0, Math.min(Math.max(0, this.candles.length - this.visibleCount), this.offsetIndex || 0));
+    if (this.lastHoveredIndex < 0) {
+      this.updateLegendWithCandle(this.candles[this.candles.length - 1]);
+    }
+    if (followLive && autoScale) this.resetPriceScale();
+    else this.requestRender();
+  }
+
   setZones(zones) {
     this.zones = zones || [];
     this.requestRender();
@@ -239,6 +265,7 @@ class FinancialChart {
     if (!this.candles.length) return;
     this.visibleCount = Math.min(this.candles.length, Math.floor((this.width - this.rightMargin) / 12));
     this.offsetIndex = 0; // rightmost
+    this.hasFitted = true;
     this.resetPriceScale();
     this.requestRender();
   }
