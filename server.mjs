@@ -408,6 +408,30 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, toolStateData);
     }
 
+    // Exchange OAuth code for Access Token
+    if (pathname === '/api/settings/upstox/exchange-code' && req.method === 'POST') {
+      const body = await parseBody(req);
+      const code = (body.code || '').trim();
+      const apiKey = (body.apiKey || upstox.config.apiKey || process.env.UPSTOX_API_KEY || '').trim();
+      const apiSecret = (body.apiSecret || upstox.config.apiSecret || process.env.UPSTOX_API_SECRET || '').trim();
+      const redirectUri = (body.redirectUri || process.env.UPSTOX_REDIRECT_URI || `http://${req.headers.host || 'localhost:3000'}`).trim();
+
+      if (!code) {
+        return sendJson(res, 400, { error: 'Authorization code is required' });
+      }
+      if (!apiKey || !apiSecret) {
+        return sendJson(res, 400, {
+          error: 'UPSTOX_API_KEY and UPSTOX_API_SECRET are required to exchange authorization code. Please enter them in the settings modal or .env.'
+        });
+      }
+
+      const result = await upstox.exchangeCodeForToken(code, apiKey, apiSecret, redirectUri);
+      if (!result.success) {
+        return sendJson(res, 400, result);
+      }
+      return sendJson(res, 200, result);
+    }
+
     // Upstox Configuration Settings
     if (pathname === '/api/settings/upstox') {
       if (req.method === 'POST') {
@@ -427,10 +451,12 @@ const server = http.createServer(async (req, res) => {
             details: testResult
           });
         }
-        // Save token
+        // Save token to .env and cache
         const status = upstox.saveConfig({
           accessToken: body.accessToken.trim(),
-          apiKey: (body.apiKey || '').trim()
+          apiKey: (body.apiKey || '').trim(),
+          apiSecret: (body.apiSecret || '').trim(),
+          userName: testResult.user
         });
         return sendJson(res, 200, {
           success: true,
@@ -442,13 +468,37 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, upstox.getStatus());
     }
 
+    // Live Quotes Endpoint
+    if (pathname === '/api/quotes') {
+      const symbolsStr = parsedUrl.searchParams.get('symbols') || '';
+      const symbols = symbolsStr.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+      if (!symbols.length) {
+        return sendJson(res, 400, { error: 'symbols query parameter required' });
+      }
+      const st = upstox.getStatus();
+      if (!st.isActive) {
+        return sendJson(res, 200, {
+          isLive: false,
+          quotes: {},
+          message: st.error || 'Upstox live market stream not active'
+        });
+      }
+      const quotes = await upstox.getQuotesForSymbols(symbols, instrumentsData.instruments);
+      return sendJson(res, 200, {
+        isLive: true,
+        quotes
+      });
+    }
+
     // 7. Candles
     if (pathname === '/api/candles') {
       const symbol = (parsedUrl.searchParams.get('symbol') || 'COCHINSHIP').toUpperCase();
       const timeframe = parsedUrl.searchParams.get('timeframe') || '1d';
+      const status = upstox.getStatus();
       
       const upstoxKey = instrumentKeyFor(symbol);
-      if (upstox.config.accessToken && upstoxKey) {
+      // If Upstox token is active and not expired, try fetching live candles from Upstox API
+      if (status.isActive && upstoxKey) {
         try {
           const liveCandles = await upstox.getCandles(upstoxKey, timeframe);
           if (liveCandles && liveCandles.length > 0) {
@@ -461,7 +511,9 @@ const server = http.createServer(async (req, res) => {
               source: 'upstox_live',
               count: liveCandles.length,
               lastPrice: last.close,
-              syncedAt: new Date().toISOString()
+              syncedAt: new Date().toISOString(),
+              status,
+              providerStatus: status
             });
           }
         } catch (upstoxErr) {
@@ -476,8 +528,12 @@ const server = http.createServer(async (req, res) => {
           timeframe,
           candles: [],
           source: 'unavailable',
-          error: 'Intraday bars need an Upstox token. Daily, weekly, and monthly history is available for every NSE stock.',
-          syncedAt: null
+          error: status.isExpired
+            ? `Upstox token expired (${status.error || 'renewal required'}). Intraday bars require an active Upstox token.`
+            : 'Intraday bars need an Upstox token. Daily, weekly, and monthly history is available for every NSE stock.',
+          syncedAt: null,
+          status,
+          providerStatus: status
         });
       }
 
@@ -492,6 +548,8 @@ const server = http.createServer(async (req, res) => {
         count: candles.length,
         lastPrice: last?.close ?? null,
         syncedAt: history.fetchedAt,
+        status,
+        providerStatus: status,
         error: candles.length ? null : (history.error || `No daily history for ${symbol}`)
       });
     }
@@ -749,6 +807,36 @@ const server = http.createServer(async (req, res) => {
         enrichedRows.sort((a, b) => (a.htfVerdictRank || 99) - (b.htfVerdictRank || 99));
       }
 
+      // If Upstox is actively connected, enrich top rows with real-time live quotes & recalculated distances
+      const upstoxStatus = upstox.getStatus();
+      if (upstoxStatus.isActive && enrichedRows.length > 0) {
+        try {
+          const sampleSymbols = Array.from(new Set(enrichedRows.slice(0, 35).map(r => r.symbol)));
+          const liveQuotes = await upstox.getQuotesForSymbols(sampleSymbols, instrumentsData.instruments);
+          enrichedRows = enrichedRows.map(r => {
+            const q = liveQuotes[r.symbol];
+            if (q && q.lastPrice) {
+              const liveCmp = q.lastPrice;
+              const isDemand = (r.zoneType || r.side) === 'demand' || r.side === 'long';
+              const boundary = isDemand ? (r.zoneTop || r.proximal || 0) : (r.zoneBottom || r.distal || 0);
+              const distPts = +(liveCmp - boundary).toFixed(2);
+              const distPercent = liveCmp > 0 ? +((Math.abs(liveCmp - boundary) / liveCmp) * 100).toFixed(2) : r.distancePercent;
+              return {
+                ...r,
+                cmp: liveCmp,
+                currentPrice: liveCmp,
+                distance: distPts,
+                distancePercent: distPercent,
+                dataQuality: 'live_upstox'
+              };
+            }
+            return r;
+          });
+        } catch (e) {
+          console.warn('Failed enriching zone rows with live quotes:', e.message);
+        }
+      }
+
       const universeLabel = (universesData.universes || []).find(u => u.key === universe)?.label || (universe === 'all' ? 'All Listed Instruments' : 'Nifty 500');
 
       return sendJson(res, 200, {
@@ -760,6 +848,8 @@ const server = http.createServer(async (req, res) => {
         universe,
         universeLabel,
         reportStatus: 'ready',
+        isLive: upstoxStatus.isActive,
+        providerStatus: upstoxStatus,
         zoneType,
         purpose,
         contextMode,
@@ -951,13 +1041,18 @@ const server = http.createServer(async (req, res) => {
 
     // 13. Loader health & Operations
     if (pathname === '/api/loader/health') {
-      const connected = !!upstox.config.accessToken;
+      const status = upstox.getStatus();
+      const connected = status.isActive;
       const nseSync = getSyncStatus();
       return sendJson(res, 200, {
-        state: connected ? "configured" : (nseSync.running ? "syncing" : "ready"),
+        state: connected ? "configured" : (status.isExpired ? "token_expired" : (nseSync.running ? "syncing" : "ready")),
         source: connected ? "upstox" : "nse",
-        syncStatus: nseSync.running ? "syncing" : (connected ? (liveSyncState.status === 'idle' ? 'live' : liveSyncState.status) : (nseSync.saved ? 'ready' : 'cached')),
+        syncStatus: nseSync.running ? "syncing" : (connected ? (liveSyncState.status === 'idle' ? 'live' : liveSyncState.status) : (status.isExpired ? "offline_fallback_expired" : (nseSync.saved ? 'ready' : 'cached'))),
         provider: connected ? "Upstox" : "NSE",
+        isExpired: status.isExpired,
+        error: status.error,
+        expiresAt: status.expiresAt,
+        userId: status.userId,
         lastSyncAt: liveSyncState.lastSyncAt || nseSync.finishedAt || nseSync.startedAt,
         quoteCount: liveSyncState.quoteCount,
         lastError: liveSyncState.lastError,

@@ -53,6 +53,14 @@
     await loadUpstoxStatus();
     await loadInstruments();
     parseUrlParams();
+
+    // Check for Upstox OAuth redirect code in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const authCode = urlParams.get('code');
+    if (authCode) {
+      await handleOAuthCallback(authCode);
+    }
+
     await switchView(state.currentView, false);
     startLiveSync();
   }
@@ -79,6 +87,54 @@
       else if (state.currentView === 'operations') await loadOperations();
     } finally {
       liveSyncBusy = false;
+    }
+  }
+
+  // Handle OAuth code returned from Upstox authorization redirect
+  async function handleOAuthCallback(code) {
+    const modal = document.getElementById('upstox-modal');
+    const banner = document.getElementById('upstox-feedback-banner');
+    if (modal) modal.classList.add('open');
+    if (banner) {
+      banner.style.display = 'block';
+      banner.style.background = 'rgba(99, 102, 241, 0.15)';
+      banner.style.color = '#818cf8';
+      banner.textContent = 'Detected Upstox authorization code. Exchanging for live access token...';
+    }
+    try {
+      const res = await fetch('/api/settings/upstox/exchange-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (banner) {
+          banner.style.background = 'rgba(16, 185, 129, 0.15)';
+          banner.style.color = '#34d399';
+          banner.textContent = data.message || 'Connected to Upstox successfully!';
+        }
+        updateUpstoxStatusUI(data.status);
+        // Clean ?code from URL
+        const cleanUrl = `${window.location.pathname}?view=${state.currentView}&symbol=${state.symbol}&timeframe=${state.timeframe}`;
+        window.history.replaceState({}, '', cleanUrl);
+        setTimeout(() => {
+          if (modal) modal.classList.remove('open');
+        }, 1200);
+      } else {
+        if (banner) {
+          banner.style.background = 'rgba(239, 68, 68, 0.15)';
+          banner.style.color = '#f87171';
+          banner.textContent = data.error || 'Failed to exchange authorization code. Please ensure UPSTOX_API_KEY and UPSTOX_API_SECRET are set.';
+        }
+      }
+    } catch (e) {
+      if (banner) {
+        banner.style.display = 'block';
+        banner.style.background = 'rgba(239, 68, 68, 0.15)';
+        banner.style.color = '#f87171';
+        banner.textContent = `Exchange error: ${e.message}`;
+      }
     }
   }
 
@@ -541,6 +597,7 @@
     let candleError = '';
     let candleCount = 0;
     let syncedAt = null;
+    let providerStatus = null;
     try {
       const candleRes = await fetch(`/api/candles?symbol=${requestedSymbol}&timeframe=${requestedTf}&max=true&basis=raw`, { cache: 'no-store' });
       const candleData = await candleRes.json();
@@ -551,6 +608,7 @@
       candleError = candleData.error || '';
       isLiveUpstox = candleSource === 'upstox_live';
       syncedAt = candleData.syncedAt || null;
+      providerStatus = candleData.status || candleData.providerStatus || null;
     } catch (e) {
       console.error('Failed fetching candles:', e);
       if (options.live && state.candles.length) return;
@@ -560,11 +618,16 @@
     const syncClock = syncedAt
       ? new Date(syncedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
       : '';
-    const liveBadge = isLiveUpstox
-      ? `<span class="badge" title="Live sync from Upstox. Price and zones refresh every 10 seconds." style="background:rgba(16,185,129,0.18);color:#10b981;border:1px solid rgba(16,185,129,0.4);font-weight:700;display:inline-flex;align-items:center;gap:5px"><span class="laser-dot" style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block;box-shadow:0 0 6px #10b981"></span> LIVE SYNC ${syncClock}</span>`
-      : candleSource === 'yahoo_nse'
-        ? `<span class="badge" title="Daily NSE history for this symbol" style="background:rgba(96,165,250,0.16);color:#60a5fa;border:1px solid rgba(96,165,250,0.35);font-weight:700">NSE HISTORY</span>`
-        : `<span class="badge" title="${candleError || 'No history for this symbol'}" style="background:rgba(255,255,255,0.06);color:var(--text-muted)">${candleError ? 'NO DATA' : 'SNAPSHOT'}</span>`;
+    let liveBadge = '';
+    if (isLiveUpstox) {
+      liveBadge = `<span class="badge" title="Live sync from Upstox. Price and zones refresh every 10 seconds." style="background:rgba(16,185,129,0.18);color:#10b981;border:1px solid rgba(16,185,129,0.4);font-weight:700;display:inline-flex;align-items:center;gap:5px"><span class="laser-dot" style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block;box-shadow:0 0 6px #10b981"></span> LIVE UPSTOX ${syncClock}</span>`;
+    } else if (providerStatus && providerStatus.isExpired) {
+      liveBadge = `<span class="badge" title="Upstox token expired. Click 'Upstox' in top navbar to renew." style="background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:700;display:inline-flex;align-items:center;gap:5px;cursor:pointer" onclick="document.getElementById('upstox-modal').classList.add('open')"><span style="width:6px;height:6px;border-radius:50%;background:#ef4444;display:inline-block"></span> TOKEN EXPIRED (CLICK TO RENEW)</span>`;
+    } else if (candleSource === 'yahoo_nse') {
+      liveBadge = `<span class="badge" title="Daily NSE history for this symbol" style="background:rgba(96,165,250,0.16);color:#60a5fa;border:1px solid rgba(96,165,250,0.35);font-weight:700">NSE HISTORY</span>`;
+    } else {
+      liveBadge = `<span class="badge" title="${candleError || 'No history for this symbol'}" style="background:rgba(255,255,255,0.06);color:var(--text-muted)">${candleError ? 'NO DATA' : 'SNAPSHOT'}</span>`;
+    }
 
     elements.chartSymbolBadge.innerHTML = `
       <span>${state.symbol}</span>
@@ -1670,20 +1733,40 @@
     try {
       const res = await fetch('/api/loader/health', { cache: 'no-store' });
       const data = await res.json();
-      document.getElementById('ops-provider-status').textContent = data.state?.toUpperCase() || 'CONFIGURED';
+      const statusEl = document.getElementById('ops-provider-status');
       const syncEl = document.getElementById('ops-provider-sync');
-      const syncStatus = (data.syncStatus || 'cached').toUpperCase();
-      syncEl.textContent = syncStatus;
-      syncEl.style.color = syncStatus === 'LIVE' ? '#10b981' : syncStatus === 'ERROR' ? '#ef4444' : '#60a5fa';
-      document.getElementById('ops-provider-name').textContent = data.provider || 'Upstox';
+      const nameEl = document.getElementById('ops-provider-name');
+
+      if (statusEl) {
+        if (data.state === 'configured') {
+          statusEl.textContent = 'CONFIGURED';
+          statusEl.style.color = 'var(--demand-green)';
+        } else if (data.state === 'token_expired') {
+          statusEl.textContent = 'TOKEN EXPIRED';
+          statusEl.style.color = '#ef4444';
+        } else {
+          statusEl.textContent = data.state?.toUpperCase() || 'DISCONNECTED';
+          statusEl.style.color = '#eab308';
+        }
+      }
+
+      if (syncEl) {
+        const syncStatus = (data.syncStatus || 'cached').toUpperCase();
+        syncEl.textContent = syncStatus;
+        syncEl.style.color = (syncStatus === 'LIVE' || syncStatus === 'LIVE_STREAM') ? '#10b981' : (syncStatus === 'ERROR' || syncStatus === 'OFFLINE_FALLBACK_EXPIRED') ? '#ef4444' : '#60a5fa';
+      }
+
+      if (nameEl) nameEl.textContent = data.provider || 'Upstox';
 
       const stream = document.getElementById('ops-activity-stream');
       if (stream) {
         const lines = (data.log && data.log.length)
           ? data.log
-          : [{ at: data.updatedAt, message: data.syncStatus === 'cached'
-              ? 'Upstox is not connected. Prices and zones stay on the saved snapshot until a token is connected.'
-              : 'Live sync is waiting for the first quote.' }];
+          : [{ at: data.updatedAt, message: data.isExpired
+              ? `Upstox token is expired: ${data.error || 'Please renew your token to stream live data.'}`
+              : (data.syncStatus === 'cached'
+                ? 'Upstox is not connected. Daily NSE history is used when available.'
+                : 'Live sync is active.') }];
         stream.innerHTML = lines.map(line => {
           const stamp = line.at ? new Date(line.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false }) : '';
           return `<div>[${stamp}] ${line.message}</div>`;
@@ -1711,7 +1794,7 @@
     const btnDisconnect = document.getElementById('btn-upstox-disconnect');
     const banner = document.getElementById('upstox-feedback-banner');
 
-    if (status && status.configured && status.isActive) {
+    if (status && status.configured && status.isActive && !status.isExpired) {
       if (dot) dot.style.background = '#10b981';
       if (text) text.innerHTML = `Upstox: <b>Connected (Live)</b>`;
       if (btnDisconnect) btnDisconnect.style.display = 'inline-flex';
@@ -1719,7 +1802,17 @@
         banner.style.display = 'block';
         banner.style.background = 'rgba(16, 185, 129, 0.15)';
         banner.style.color = '#34d399';
-        banner.innerHTML = `Connected to Upstox API v2 (${status.maskedToken || 'Active'}). Live NSE market data is enabled.`;
+        banner.innerHTML = `<strong>Connected to Upstox API v2</strong> (${status.userId || status.maskedToken || 'Active'}). Live NSE market data streaming is active.`;
+      }
+    } else if (status && status.isExpired) {
+      if (dot) dot.style.background = '#ef4444';
+      if (text) text.innerHTML = `Upstox: <b style="color:#f87171">Token Expired</b>`;
+      if (btnDisconnect) btnDisconnect.style.display = 'inline-flex';
+      if (banner) {
+        banner.style.display = 'block';
+        banner.style.background = 'rgba(239, 68, 68, 0.15)';
+        banner.style.color = '#f87171';
+        banner.innerHTML = `<strong>Upstox Token Expired:</strong> ${status.error || 'Upstox tokens expire daily at 3:30 AM IST.'}<br><span style="color:var(--text-muted);font-size:11px;margin-top:4px;display:inline-block">To sync live data: run <code>npm run token</code> in terminal, or paste today's active token below.</span>`;
       }
     } else {
       if (dot) dot.style.background = '#eab308';
@@ -1740,8 +1833,9 @@
     const banner = document.getElementById('upstox-feedback-banner');
 
     if (btnOpen) {
-      btnOpen.addEventListener('click', () => {
+      btnOpen.addEventListener('click', async () => {
         if (modal) modal.classList.add('open');
+        await loadUpstoxStatus();
       });
     }
 
@@ -1765,7 +1859,7 @@
         }
 
         btnConnect.disabled = true;
-        btnConnect.textContent = 'Validating...';
+        btnConnect.textContent = 'Validating with Upstox...';
 
         try {
           const res = await fetch('/api/settings/upstox', {

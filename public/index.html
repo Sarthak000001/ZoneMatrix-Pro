@@ -890,9 +890,21 @@
           <button id="upstox-modal-close" class="close-btn">&times;</button>
         </div>
 
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;line-height:1.5">
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">
           Connect your personal Upstox account to stream live market data, OHLCV candles, and real-time quotes directly from the National Stock Exchange (NSE).
         </p>
+
+        <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:var(--radius-md);padding:10px 12px;font-size:12px;color:var(--text-muted);line-height:1.5;margin-bottom:6px">
+          <strong style="color:var(--text-main);display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#6366f1"></span>
+            Daily Token Requirement
+          </strong>
+          Upstox access tokens are invalidated daily at 3:30 AM IST. You can generate today's token using either:
+          <ul style="margin:6px 0 0 16px;padding:0">
+            <li>Terminal: run <code>npm run token</code> (OAuth login assistant)</li>
+            <li>Web: generate token in <a href="https://developer.upstox.com/" target="_blank" style="color:var(--primary);text-decoration:none">Upstox Developer Portal</a> and paste below</li>
+          </ul>
+        </div>
 
         <div style="display:flex;flex-direction:column;gap:14px">
           <div>

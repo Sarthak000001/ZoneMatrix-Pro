@@ -1,5 +1,5 @@
 /**
- * C&C Financials - Upstox API v2 Live Market Data Service
+ * ZoneMatrix Pro - Upstox API v2 Live Market Data Service
  */
 
 import fs from 'node:fs';
@@ -10,6 +10,7 @@ import './env.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const CONFIG_FILE = path.join(__dirname, '_cache/upstox-config.json');
+const ENV_FILE = path.join(__dirname, '.env');
 const HISTORY_TTL_MS = 45_000;
 const QUOTE_TTL_MS = 8_000;
 
@@ -124,13 +125,74 @@ export function mergeLiveQuote(candles, quote, timeframe, barMinutes = null) {
   return out;
 }
 
+/**
+ * Safely update .env file key-value pairs
+ */
+function updateEnvFile(keyValues) {
+  try {
+    let content = fs.existsSync(ENV_FILE) ? fs.readFileSync(ENV_FILE, 'utf8') : '';
+    for (const [key, val] of Object.entries(keyValues)) {
+      const regex = new RegExp(`^${key}=.*$`, 'm');
+      if (regex.test(content)) {
+        content = content.replace(regex, `${key}=${val}`);
+      } else {
+        content += (content && !content.endsWith('\n') ? '\n' : '') + `${key}=${val}\n`;
+      }
+    }
+    fs.writeFileSync(ENV_FILE, content, 'utf8');
+  } catch (err) {
+    console.warn('Could not update .env file:', err.message);
+  }
+}
+
+/**
+ * Inspect JWT token structure and expiration
+ */
+function inspectToken(token) {
+  if (!token) {
+    return { configured: false, isValid: false, isExpired: false, reason: 'No token configured' };
+  }
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+      const nowSec = Math.floor(Date.now() / 1000);
+      const expDate = payload.exp ? new Date(payload.exp * 1000) : null;
+      if (payload.exp && payload.exp <= nowSec) {
+        return {
+          configured: true,
+          isValid: false,
+          isExpired: true,
+          userId: payload.sub || null,
+          expiresAt: expDate.toISOString(),
+          reason: `Upstox token expired on ${expDate.toLocaleDateString('en-IN')} at ${expDate.toLocaleTimeString('en-IN')}. Daily renewal is required.`
+        };
+      }
+      return {
+        configured: true,
+        isValid: true,
+        isExpired: false,
+        userId: payload.sub || null,
+        expiresAt: expDate ? expDate.toISOString() : null,
+        reason: 'Token signature structure valid'
+      };
+    }
+  } catch {
+    // Non-standard format or opaque token
+  }
+  return { configured: true, isValid: true, isExpired: false, reason: 'Custom format token' };
+}
+
 class UpstoxService {
   constructor() {
     this.config = {
       accessToken: process.env.UPSTOX_ACCESS_TOKEN || '',
       apiKey: process.env.UPSTOX_API_KEY || '',
       apiSecret: process.env.UPSTOX_API_SECRET || '',
+      userName: '',
       isActive: false,
+      isExpired: false,
+      error: null,
       lastValidated: null
     };
     this.historyCache = new Map();
@@ -147,7 +209,8 @@ class UpstoxService {
     } catch (e) {
       console.error('Error loading upstox-config:', e.message);
     }
-    // Environment variables take precedence over cached config file
+
+    // Environment variables take precedence
     if (process.env.UPSTOX_ACCESS_TOKEN) {
       this.config.accessToken = process.env.UPSTOX_ACCESS_TOKEN;
     }
@@ -157,17 +220,56 @@ class UpstoxService {
     if (process.env.UPSTOX_API_SECRET) {
       this.config.apiSecret = process.env.UPSTOX_API_SECRET;
     }
-    if (this.config.accessToken) {
+
+    // Inspect the token immediately
+    const tokenInfo = inspectToken(this.config.accessToken);
+    if (!this.config.accessToken) {
+      this.config.isActive = false;
+      this.config.isExpired = false;
+      this.config.error = null;
+    } else if (tokenInfo.isExpired) {
+      this.config.isActive = false;
+      this.config.isExpired = true;
+      this.config.error = tokenInfo.reason;
+    } else {
       this.config.isActive = true;
+      this.config.isExpired = false;
+      this.config.error = null;
     }
   }
 
   saveConfig(newConfig) {
     this.config = { ...this.config, ...newConfig };
-    if (this.config.accessToken) {
+
+    const tokenInfo = inspectToken(this.config.accessToken);
+    if (!this.config.accessToken) {
+      this.config.isActive = false;
+      this.config.isExpired = false;
+      this.config.error = null;
+    } else if (tokenInfo.isExpired) {
+      this.config.isActive = false;
+      this.config.isExpired = true;
+      this.config.error = tokenInfo.reason;
+    } else {
       this.config.isActive = true;
+      this.config.isExpired = false;
+      this.config.error = null;
       this.config.lastValidated = new Date().toISOString();
     }
+
+    // Persist to .env and process.env
+    const envUpdates = {};
+    if (newConfig.accessToken !== undefined) envUpdates.UPSTOX_ACCESS_TOKEN = newConfig.accessToken;
+    if (newConfig.apiKey !== undefined) envUpdates.UPSTOX_API_KEY = newConfig.apiKey;
+    if (newConfig.apiSecret !== undefined) envUpdates.UPSTOX_API_SECRET = newConfig.apiSecret;
+    if (Object.keys(envUpdates).length > 0) {
+      updateEnvFile(envUpdates);
+      for (const [k, v] of Object.entries(envUpdates)) {
+        process.env[k] = v;
+      }
+    }
+
+    // Persist to cache file
     try {
       const cacheDir = path.dirname(CONFIG_FILE);
       if (!fs.existsSync(cacheDir)) {
@@ -182,9 +284,16 @@ class UpstoxService {
 
   getStatus() {
     const isEnv = !!process.env.UPSTOX_ACCESS_TOKEN;
+    const tokenInfo = inspectToken(this.config.accessToken);
+    const isActuallyExpired = this.config.isExpired || tokenInfo.isExpired;
+
     return {
       configured: !!this.config.accessToken,
-      isActive: this.config.isActive,
+      isActive: this.config.isActive && !isActuallyExpired,
+      isExpired: isActuallyExpired,
+      expiresAt: tokenInfo.expiresAt || null,
+      userId: this.config.userName || tokenInfo.userId || null,
+      error: this.config.error || (isActuallyExpired ? tokenInfo.reason : null),
       maskedToken: this.config.accessToken ? `${this.config.accessToken.slice(0, 8)}...${this.config.accessToken.slice(-6)}` : null,
       lastValidated: this.config.lastValidated,
       source: isEnv ? 'environment' : (this.config.accessToken ? 'user_configured' : 'none')
@@ -196,6 +305,14 @@ class UpstoxService {
     const testToken = token || this.config.accessToken;
     if (!testToken) return { valid: false, message: 'No access token provided' };
 
+    const tokenInfo = inspectToken(testToken);
+    if (tokenInfo.isExpired) {
+      this.config.isActive = false;
+      this.config.isExpired = true;
+      this.config.error = tokenInfo.reason;
+      return { valid: false, message: tokenInfo.reason, isExpired: true };
+    }
+
     try {
       const res = await fetch('https://api.upstox.com/v2/user/profile', {
         headers: {
@@ -206,13 +323,26 @@ class UpstoxService {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        return { valid: false, message: err.message || `Upstox authentication failed with status ${res.status}` };
+        const msg = err.errors?.[0]?.message || err.message || `Upstox authentication failed with status ${res.status}`;
+        if (res.status === 401) {
+          this.config.isActive = false;
+          this.config.isExpired = true;
+          this.config.error = msg;
+        }
+        return { valid: false, message: msg, status: res.status };
       }
 
       const profile = await res.json();
+      const userName = profile.data?.user_name || profile.data?.email || 'Upstox Trader';
+      this.config.isActive = true;
+      this.config.isExpired = false;
+      this.config.userName = userName;
+      this.config.error = null;
+      this.config.lastValidated = new Date().toISOString();
+
       return {
         valid: true,
-        user: profile.data?.user_name || profile.data?.email || 'Upstox Trader',
+        user: userName,
         profile: profile.data
       };
     } catch (e) {
@@ -220,7 +350,153 @@ class UpstoxService {
     }
   }
 
-  // Helper to aggregate smaller candles into target minute intervals
+  // Exchange OAuth Authorization Code for Access Token
+  async exchangeCodeForToken(code, apiKey, apiSecret, redirectUri) {
+    try {
+      const bodyParams = new URLSearchParams({
+        code,
+        client_id: apiKey,
+        client_secret: apiSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code'
+      });
+
+      const res = await fetch('https://api.upstox.com/v2/login/authorization/token', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: bodyParams.toString()
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.access_token) {
+        return {
+          success: false,
+          error: data.errors?.[0]?.message || data.message || 'Failed to exchange authorization code with Upstox'
+        };
+      }
+
+      const accessToken = data.access_token;
+      const userName = data.user_name || data.email || 'Upstox Trader';
+
+      this.saveConfig({
+        accessToken,
+        apiKey,
+        apiSecret,
+        userName,
+        isActive: true,
+        isExpired: false,
+        error: null,
+        lastValidated: new Date().toISOString()
+      });
+
+      return {
+        success: true,
+        message: `Successfully connected to Upstox account (${userName})`,
+        user: userName,
+        status: this.getStatus()
+      };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  // Helper to fetch and parse candles from an Upstox URL
+  async fetchCandlesUrl(url, headers) {
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      if (res.status === 401) {
+        this.config.isActive = false;
+        this.config.isExpired = true;
+        this.config.error = 'Upstox Access Token has expired (401 Unauthorized). Please renew your token.';
+      }
+      const errorText = await res.text();
+      throw new Error(`Upstox Candle API Error (${res.status}): ${errorText}`);
+    }
+
+    const data = await res.json();
+    const rawCandles = data.data?.candles || [];
+
+    return rawCandles.map(c => {
+      const timeSec = Math.floor(new Date(c[0]).getTime() / 1000);
+      return {
+        time: timeSec,
+        open: Number(c[1]),
+        high: Number(c[2]),
+        low: Number(c[3]),
+        close: Number(c[4]),
+        volume: Number(c[5]) || 0,
+        source: 'upstox_live'
+      };
+    }).sort((a, b) => a.time - b.time);
+  }
+
+  // Merge historical and today's intraday candle lists
+  mergeCandles(arr1 = [], arr2 = []) {
+    const map = new Map();
+    for (const c of arr1) map.set(c.time, c);
+    for (const c of arr2) map.set(c.time, c);
+    return Array.from(map.values()).sort((a, b) => a.time - b.time);
+  }
+
+  // Merge or update the latest daily candle with today's live session data
+  mergeDailyCandle(historicalCandles, todayCandle) {
+    if (!historicalCandles || !historicalCandles.length) return [todayCandle];
+    if (!todayCandle) return historicalCandles;
+
+    const list = [...historicalCandles];
+    const last = list[list.length - 1];
+    const lastDate = new Date(last.time * 1000).toDateString();
+    const todayDate = new Date(todayCandle.time * 1000).toDateString();
+
+    if (lastDate === todayDate) {
+      list[list.length - 1] = {
+        ...last,
+        high: Math.max(last.high, todayCandle.high),
+        low: Math.min(last.low, todayCandle.low),
+        close: todayCandle.close,
+        volume: Math.max(last.volume, todayCandle.volume),
+        source: 'upstox_live'
+      };
+    } else {
+      list.push(todayCandle);
+    }
+    return list;
+  }
+
+  // Aggregate today's intraday bars into one daily candle
+  aggregateBarsToDaily(bars) {
+    if (!bars || !bars.length) return null;
+    const sorted = [...bars].sort((a, b) => a.time - b.time);
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const today = new Date(last.time * 1000);
+    const todayMidnight = Math.floor(new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() / 1000);
+
+    let high = -Infinity;
+    let low = Infinity;
+    let volume = 0;
+
+    for (const b of sorted) {
+      if (b.high > high) high = b.high;
+      if (b.low < low) low = b.low;
+      volume += (b.volume || 0);
+    }
+
+    return {
+      time: todayMidnight,
+      open: first.open,
+      high,
+      low,
+      close: last.close,
+      volume,
+      source: 'upstox_live'
+    };
+  }
+
+  // Resample smaller candles into larger minute intervals (e.g. 1m -> 5m, 15m; 30m -> 75m, 125m)
   aggregateCandles(candles, targetMinutes) {
     if (!candles || !candles.length) return [];
     const targetSec = targetMinutes * 60;
@@ -248,7 +524,7 @@ class UpstoxService {
     return Array.from(grouped.values()).sort((a, b) => a.time - b.time);
   }
 
-  // Fetch Live / Historical Candles from Upstox, then overlay the live quote.
+  // Fetch Live / Historical Candles from Upstox with live quote overlay
   async getCandles(instrumentKey, timeframe = '1d') {
     const series = await this.getHistoricalSeries(instrumentKey, timeframe);
     let quote = null;
@@ -266,6 +542,14 @@ class UpstoxService {
       throw new Error('Upstox Access Token is not configured');
     }
 
+    const tokenInfo = inspectToken(this.config.accessToken);
+    if (tokenInfo.isExpired) {
+      this.config.isActive = false;
+      this.config.isExpired = true;
+      this.config.error = tokenInfo.reason;
+      throw new Error(tokenInfo.reason);
+    }
+
     const cacheKey = `${instrumentKey}|${timeframe}`;
     const cached = this.historyCache.get(cacheKey);
     if (cached && Date.now() - cached.at < HISTORY_TTL_MS) {
@@ -275,68 +559,84 @@ class UpstoxService {
     const encodedKey = encodeURIComponent(instrumentKey);
     const today = new Date();
     const toDate = today.toISOString().split('T')[0];
-
-    let interval = 'day';
-    let url = '';
-    let targetAggregateMinutes = null;
-
-    if (timeframe === '1w') {
-      interval = 'week';
-      url = `https://api.upstox.com/v2/historical-candle/${encodedKey}/week/${toDate}`;
-    } else if (timeframe === '1M') {
-      interval = 'month';
-      url = `https://api.upstox.com/v2/historical-candle/${encodedKey}/month/${toDate}`;
-    } else if (timeframe === '5m' || timeframe === '15m' || timeframe === '1m') {
-      // 1-minute base data for intraday (safe 10-day range permitted by Upstox API)
-      interval = '1minute';
-      const past10 = new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      url = `https://api.upstox.com/v2/historical-candle/${encodedKey}/1minute/${toDate}/${past10}`;
-      if (timeframe === '5m') targetAggregateMinutes = 5;
-      if (timeframe === '15m') targetAggregateMinutes = 15;
-    } else if (timeframe === '30m' || timeframe === '60m' || timeframe === '75m' || timeframe === '125m' || timeframe === '240m') {
-      // 30-minute base data for multi-hour and 75m bars (safe 60-day range permitted by Upstox API)
-      interval = '30minute';
-      const past60 = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      url = `https://api.upstox.com/v2/historical-candle/${encodedKey}/30minute/${toDate}/${past60}`;
-      if (timeframe === '60m') targetAggregateMinutes = 60;
-      if (timeframe === '75m') targetAggregateMinutes = 75;
-      if (timeframe === '125m') targetAggregateMinutes = 125;
-      if (timeframe === '240m') targetAggregateMinutes = 240;
-    } else {
-      // Default: daily candles with full historical depth (omitting fromDate yields up to 2,480 bars)
-      interval = 'day';
-      url = `https://api.upstox.com/v2/historical-candle/${encodedKey}/day/${toDate}`;
-    }
-
     const headers = {
       'Accept': 'application/json',
       'Authorization': `Bearer ${this.config.accessToken}`
     };
 
-    const res = await fetch(url, { headers });
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(`Upstox Candle API Error (${res.status}): ${errorText}`);
+    let formatted = [];
+    let targetAggregateMinutes = null;
+
+    if (timeframe === '1w') {
+      const url = `https://api.upstox.com/v2/historical-candle/${encodedKey}/week/${toDate}`;
+      formatted = await this.fetchCandlesUrl(url, headers);
+    } else if (timeframe === '1M') {
+      const url = `https://api.upstox.com/v2/historical-candle/${encodedKey}/month/${toDate}`;
+      formatted = await this.fetchCandlesUrl(url, headers);
+    } else if (timeframe === '5m' || timeframe === '15m' || timeframe === '1m') {
+      // 1-minute base data for intraday
+      const past10 = new Date(today.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const histUrl = `https://api.upstox.com/v2/historical-candle/${encodedKey}/1minute/${toDate}/${past10}`;
+      const histCandles = await this.fetchCandlesUrl(histUrl, headers).catch(() => []);
+
+      // Also fetch today's live intraday candles
+      const liveIntradayUrl = `https://api.upstox.com/v2/historical-candle/intraday/${encodedKey}/1minute`;
+      const liveCandles = await this.fetchCandlesUrl(liveIntradayUrl, headers).catch(() => []);
+
+      formatted = this.mergeCandles(histCandles, liveCandles);
+      if (timeframe === '5m') targetAggregateMinutes = 5;
+      if (timeframe === '15m') targetAggregateMinutes = 15;
+    } else if (timeframe === '30m' || timeframe === '60m' || timeframe === '75m' || timeframe === '125m' || timeframe === '240m') {
+      // 30-minute base data for multi-hour and 75m bars
+      const past60 = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const histUrl = `https://api.upstox.com/v2/historical-candle/${encodedKey}/30minute/${toDate}/${past60}`;
+      const histCandles = await this.fetchCandlesUrl(histUrl, headers).catch(() => []);
+
+      // Also fetch today's live intraday candles
+      const liveIntradayUrl = `https://api.upstox.com/v2/historical-candle/intraday/${encodedKey}/30minute`;
+      const liveCandles = await this.fetchCandlesUrl(liveIntradayUrl, headers).catch(() => []);
+
+      formatted = this.mergeCandles(histCandles, liveCandles);
+      if (timeframe === '60m') targetAggregateMinutes = 60;
+      if (timeframe === '75m') targetAggregateMinutes = 75;
+      if (timeframe === '125m') targetAggregateMinutes = 125;
+      if (timeframe === '240m') targetAggregateMinutes = 240;
+    } else {
+      // Default: daily candles with full historical depth
+      const url = `https://api.upstox.com/v2/historical-candle/${encodedKey}/day/${toDate}`;
+      formatted = await this.fetchCandlesUrl(url, headers);
+
+      // Fetch today's live session to ensure the daily chart includes the live session candle
+      try {
+        const liveIntradayUrl = `https://api.upstox.com/v2/historical-candle/intraday/${encodedKey}/30minute`;
+        const todayBars = await this.fetchCandlesUrl(liveIntradayUrl, headers);
+        if (todayBars && todayBars.length > 0) {
+          const todayCandle = this.aggregateBarsToDaily(todayBars);
+          if (todayCandle) {
+            formatted = this.mergeDailyCandle(formatted, todayCandle);
+          }
+        }
+      } catch {
+        // Fallback: try market quote if intraday candle unavailable
+        try {
+          const quotes = await this.getMarketQuotes([instrumentKey]);
+          const quote = quotes[instrumentKey] || Object.values(quotes)[0];
+          if (quote && quote.last_price && quote.ohlc) {
+            const todayCandle = {
+              time: Math.floor(new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() / 1000),
+              open: quote.ohlc.open,
+              high: quote.ohlc.high,
+              low: quote.ohlc.low,
+              close: quote.last_price,
+              volume: quote.volume || 0,
+              source: 'upstox_live'
+            };
+            formatted = this.mergeDailyCandle(formatted, todayCandle);
+          }
+        } catch {}
+      }
     }
 
-    const data = await res.json();
-    const rawCandles = data.data?.candles || [];
-
-    // Convert Upstox candle format: [timestamp_iso, open, high, low, close, volume, open_interest]
-    const formatted = rawCandles.map(c => {
-      const timeSec = Math.floor(new Date(c[0]).getTime() / 1000);
-      return {
-        time: timeSec,
-        open: Number(c[1]),
-        high: Number(c[2]),
-        low: Number(c[3]),
-        close: Number(c[4]),
-        volume: Number(c[5]) || 0,
-        source: 'upstox_live'
-      };
-    }).sort((a, b) => a.time - b.time);
-
-    // If an aggregated timeframe is requested, resample cleanly
     let series = formatted;
     if (targetAggregateMinutes && targetAggregateMinutes > 1) {
       series = this.aggregateCandles(formatted, targetAggregateMinutes);
@@ -374,7 +674,14 @@ class UpstoxService {
       }
     });
 
-    if (!res.ok) return merged;
+    if (!res.ok) {
+      if (res.status === 401) {
+        this.config.isActive = false;
+        this.config.isExpired = true;
+        this.config.error = 'Upstox Access Token has expired (401 Unauthorized).';
+      }
+      return merged;
+    }
     const data = await res.json();
     const fresh = data.data || {};
     for (const [responseKey, quote] of Object.entries(fresh)) {
@@ -383,6 +690,46 @@ class UpstoxService {
       merged[responseKey] = quote;
     }
     return merged;
+  }
+
+  // Helper to fetch live quotes by stock symbols
+  async getQuotesForSymbols(symbols = [], instruments = []) {
+    if (!this.config.accessToken || !symbols.length) return {};
+    const keys = [];
+    const symToKey = new Map();
+
+    for (const sym of symbols) {
+      const clean = sym.toUpperCase();
+      const inst = instruments.find(i => (i.symbol && i.symbol.toUpperCase() === clean));
+      const key = inst?.upstoxInstrumentKey || (clean.startsWith('NSE_EQ|') || clean.startsWith('NSE_INDEX|') ? clean : `NSE_EQ|${clean}`);
+      keys.push(key);
+      symToKey.set(key, clean);
+      symToKey.set(key.replace('|', ':'), clean);
+      symToKey.set(`NSE_EQ:${clean}`, clean);
+    }
+
+    try {
+      const rawQuotes = await this.getMarketQuotes(keys);
+      const result = {};
+      for (const [key, q] of Object.entries(rawQuotes)) {
+        const symbol = symToKey.get(key) || key.split(':').pop() || key.split('|').pop();
+        result[symbol] = {
+          symbol,
+          lastPrice: q.last_price,
+          close: q.ohlc?.close || q.last_price,
+          open: q.ohlc?.open,
+          high: q.ohlc?.high,
+          low: q.ohlc?.low,
+          volume: q.volume,
+          change: q.net_change,
+          timestamp: q.timestamp
+        };
+      }
+      return result;
+    } catch (e) {
+      console.warn('Error fetching quotes for symbols:', e.message);
+      return {};
+    }
   }
 }
 
