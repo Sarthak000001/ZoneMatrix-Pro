@@ -271,6 +271,7 @@
         elements.tfButtons.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         state.timeframe = btn.dataset.tf;
+        if (state.chart) state.chart.setTimeframe(state.timeframe);
         updateUrl();
         loadChartData();
       });
@@ -669,9 +670,12 @@
       const activeTheme = document.documentElement.getAttribute('data-theme') || 'dark';
       state.chart = new window.FinancialChart('chart-container', {
         theme: activeTheme,
+        timeframe: requestedTf,
         onZoneSelect: (zone) => openZoneDrawer(zone)
       });
       state.chart.setTheme(activeTheme);
+    } else {
+      state.chart.setTimeframe(requestedTf);
     }
 
     if (options.live) state.chart.applyLiveUpdate(state.candles, visibleZones);
@@ -968,7 +972,7 @@
       const adjVal = r.htfAdjustment != null ? r.htfAdjustment : 0;
       const adjStr = adjVal >= 0 ? `+${adjVal.toFixed(2)}` : adjVal.toFixed(2);
 
-      const originDate = r.legOutTime ? new Date(r.legOutTime > 1e11 ? r.legOutTime : r.legOutTime * 1000).toLocaleDateString() : '-';
+      const originDate = r.legOutTime ? new Date(r.legOutTime > 1e11 ? r.legOutTime : r.legOutTime * 1000).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-';
 
       // Opposite Zone Nearest
       let oppSummary = '-';
@@ -1441,21 +1445,21 @@
       // Deep linking to HTF chart
       tr.querySelector('.btn-htf-zone').addEventListener('click', () => {
         state.symbol = r.symbol;
-        state.timeframe = (r.htf || '1M').toLowerCase();
+        state.timeframe = r.htf || '1M';
         switchView('chart');
       });
 
       // Deep linking to LTF chart
       tr.querySelector('.btn-ltf-zone').addEventListener('click', () => {
         state.symbol = r.symbol;
-        state.timeframe = (r.ltf || '1d').toLowerCase();
+        state.timeframe = r.ltf || '1d';
         switchView('chart');
       });
 
       // Open Chart
       tr.querySelector('.btn-open-chart').addEventListener('click', () => {
         state.symbol = r.symbol;
-        state.timeframe = (r.ltf || '1d').toLowerCase();
+        state.timeframe = r.ltf || '1d';
         switchView('chart');
       });
 
