@@ -146,11 +146,11 @@ function updateEnvFile(keyValues) {
 }
 
 /**
- * Inspect JWT token structure and expiration
+ * Inspect token structure and expiration (Supports 1-Year Analytics Token and Daily OAuth Tokens)
  */
-function inspectToken(token) {
+export function inspectToken(token) {
   if (!token) {
-    return { configured: false, isValid: false, isExpired: false, reason: 'No token configured' };
+    return { configured: false, isValid: false, isExpired: false, tokenType: 'none', reason: 'No token configured' };
   }
   try {
     const parts = token.split('.');
@@ -158,35 +158,53 @@ function inspectToken(token) {
       const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
       const nowSec = Math.floor(Date.now() / 1000);
       const expDate = payload.exp ? new Date(payload.exp * 1000) : null;
-      if (payload.exp && payload.exp <= nowSec) {
+      const isExpired = payload.exp && payload.exp <= nowSec;
+      const hoursRemaining = payload.exp ? (payload.exp - nowSec) / 3600 : null;
+      // Analytics tokens are issued for ~1 year (365 days / ~8760 hrs).
+      // Standard OAuth tokens are issued for 1 trading day (expires at 3:30 AM).
+      const isLongLived = hoursRemaining == null || hoursRemaining > 48;
+      const tokenType = isLongLived ? 'Analytics Token (1-Year Long-Lived)' : 'Standard Access Token (Daily 3:30 AM)';
+
+      if (isExpired) {
         return {
           configured: true,
           isValid: false,
           isExpired: true,
+          tokenType,
+          isAnalytics: isLongLived,
           userId: payload.sub || null,
           expiresAt: expDate.toISOString(),
-          reason: `Upstox token expired on ${expDate.toLocaleDateString('en-IN')} at ${expDate.toLocaleTimeString('en-IN')}. Daily renewal is required.`
+          reason: `Upstox token expired on ${expDate.toLocaleDateString('en-IN')} at ${expDate.toLocaleTimeString('en-IN')}. Please generate a new Analytics Token in Upstox Developer Console.`
         };
       }
       return {
         configured: true,
         isValid: true,
         isExpired: false,
+        tokenType,
+        isAnalytics: isLongLived,
         userId: payload.sub || null,
         expiresAt: expDate ? expDate.toISOString() : null,
-        reason: 'Token signature structure valid'
+        reason: isLongLived ? 'Long-lived Analytics Token active (No daily 3:30 AM expiration)' : 'Standard Access Token active'
       };
     }
   } catch {
     // Non-standard format or opaque token
   }
-  return { configured: true, isValid: true, isExpired: false, reason: 'Custom format token' };
+  return {
+    configured: true,
+    isValid: true,
+    isExpired: false,
+    tokenType: 'Analytics Token (Long-Lived)',
+    isAnalytics: true,
+    reason: 'Token structure recognized'
+  };
 }
 
 class UpstoxService {
   constructor() {
     this.config = {
-      accessToken: process.env.UPSTOX_ACCESS_TOKEN || '',
+      accessToken: process.env.UPSTOX_ANALYTICS_TOKEN || process.env.UPSTOX_ACCESS_TOKEN || '',
       apiKey: process.env.UPSTOX_API_KEY || '',
       apiSecret: process.env.UPSTOX_API_SECRET || '',
       userName: '',
@@ -210,9 +228,10 @@ class UpstoxService {
       console.error('Error loading upstox-config:', e.message);
     }
 
-    // Environment variables take precedence
-    if (process.env.UPSTOX_ACCESS_TOKEN) {
-      this.config.accessToken = process.env.UPSTOX_ACCESS_TOKEN;
+    // Environment variables take precedence (check UPSTOX_ANALYTICS_TOKEN first, then UPSTOX_ACCESS_TOKEN)
+    const envToken = process.env.UPSTOX_ANALYTICS_TOKEN || process.env.UPSTOX_ACCESS_TOKEN;
+    if (envToken) {
+      this.config.accessToken = envToken;
     }
     if (process.env.UPSTOX_API_KEY) {
       this.config.apiKey = process.env.UPSTOX_API_KEY;
@@ -257,9 +276,12 @@ class UpstoxService {
       this.config.lastValidated = new Date().toISOString();
     }
 
-    // Persist to .env and process.env
+    // Persist to .env and process.env (saves both UPSTOX_ANALYTICS_TOKEN and UPSTOX_ACCESS_TOKEN for compatibility)
     const envUpdates = {};
-    if (newConfig.accessToken !== undefined) envUpdates.UPSTOX_ACCESS_TOKEN = newConfig.accessToken;
+    if (newConfig.accessToken !== undefined) {
+      envUpdates.UPSTOX_ANALYTICS_TOKEN = newConfig.accessToken;
+      envUpdates.UPSTOX_ACCESS_TOKEN = newConfig.accessToken;
+    }
     if (newConfig.apiKey !== undefined) envUpdates.UPSTOX_API_KEY = newConfig.apiKey;
     if (newConfig.apiSecret !== undefined) envUpdates.UPSTOX_API_SECRET = newConfig.apiSecret;
     if (Object.keys(envUpdates).length > 0) {
@@ -283,7 +305,7 @@ class UpstoxService {
   }
 
   getStatus() {
-    const isEnv = !!process.env.UPSTOX_ACCESS_TOKEN;
+    const isEnv = !!(process.env.UPSTOX_ANALYTICS_TOKEN || process.env.UPSTOX_ACCESS_TOKEN);
     const tokenInfo = inspectToken(this.config.accessToken);
     const isActuallyExpired = this.config.isExpired || tokenInfo.isExpired;
 
@@ -291,8 +313,10 @@ class UpstoxService {
       configured: !!this.config.accessToken,
       isActive: this.config.isActive && !isActuallyExpired,
       isExpired: isActuallyExpired,
+      tokenType: tokenInfo.tokenType || (tokenInfo.isAnalytics ? 'Analytics Token (1-Year)' : 'Standard Access Token'),
+      isAnalytics: tokenInfo.isAnalytics ?? true,
       expiresAt: tokenInfo.expiresAt || null,
-      userId: this.config.userName || tokenInfo.userId || null,
+      userId: this.config.userName || tokenInfo.userId || 'Upstox Trader',
       error: this.config.error || (isActuallyExpired ? tokenInfo.reason : null),
       maskedToken: this.config.accessToken ? `${this.config.accessToken.slice(0, 8)}...${this.config.accessToken.slice(-6)}` : null,
       lastValidated: this.config.lastValidated,
@@ -303,7 +327,7 @@ class UpstoxService {
   // Validate Token with Upstox API
   async validateToken(token) {
     const testToken = token || this.config.accessToken;
-    if (!testToken) return { valid: false, message: 'No access token provided' };
+    if (!testToken) return { valid: false, message: 'No access token or analytics token provided' };
 
     const tokenInfo = inspectToken(testToken);
     if (tokenInfo.isExpired) {
@@ -314,26 +338,45 @@ class UpstoxService {
     }
 
     try {
-      const res = await fetch('https://api.upstox.com/v2/user/profile', {
+      // Step 1: Validate against Upstox Market Data API.
+      // Market data endpoints (quotes/LTP) work with both 1-year Analytics Tokens and daily OAuth tokens
+      // from any server or IP, without requiring a static IP whitelist.
+      const quoteRes = await fetch('https://api.upstox.com/v2/market-quote/quotes?instrument_key=NSE_INDEX|Nifty 50', {
         headers: {
           'Authorization': `Bearer ${testToken}`,
           'Accept': 'application/json'
         }
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const msg = err.errors?.[0]?.message || err.message || `Upstox authentication failed with status ${res.status}`;
-        if (res.status === 401) {
+      if (!quoteRes.ok) {
+        const err = await quoteRes.json().catch(() => ({}));
+        const msg = err.errors?.[0]?.message || err.message || `Upstox authentication failed with status ${quoteRes.status}`;
+        if (quoteRes.status === 401) {
           this.config.isActive = false;
           this.config.isExpired = true;
           this.config.error = msg;
         }
-        return { valid: false, message: msg, status: res.status };
+        return { valid: false, message: msg, status: quoteRes.status };
       }
 
-      const profile = await res.json();
-      const userName = profile.data?.user_name || profile.data?.email || 'Upstox Trader';
+      // Step 2: Optionally fetch user profile to display account name (works if OAuth token or static IP whitelisted).
+      // If 403 or unavailable, we still consider the token valid for analytics & market data.
+      let userName = tokenInfo.userId || 'Upstox Analytics User';
+      let profileData = null;
+      try {
+        const profileRes = await fetch('https://api.upstox.com/v2/user/profile', {
+          headers: {
+            'Authorization': `Bearer ${testToken}`,
+            'Accept': 'application/json'
+          }
+        });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          userName = profile.data?.user_name || profile.data?.email || userName;
+          profileData = profile.data;
+        }
+      } catch {}
+
       this.config.isActive = true;
       this.config.isExpired = false;
       this.config.userName = userName;
@@ -343,7 +386,9 @@ class UpstoxService {
       return {
         valid: true,
         user: userName,
-        profile: profile.data
+        profile: profileData,
+        tokenType: tokenInfo.tokenType,
+        isAnalytics: tokenInfo.isAnalytics
       };
     } catch (e) {
       return { valid: false, message: e.message };
@@ -410,7 +455,7 @@ class UpstoxService {
       if (res.status === 401) {
         this.config.isActive = false;
         this.config.isExpired = true;
-        this.config.error = 'Upstox Access Token has expired (401 Unauthorized). Please renew your token.';
+        this.config.error = 'Upstox Token has expired or is invalid (401 Unauthorized). Please update your Analytics Token in settings.';
       }
       const errorText = await res.text();
       throw new Error(`Upstox Candle API Error (${res.status}): ${errorText}`);
@@ -678,7 +723,7 @@ class UpstoxService {
       if (res.status === 401) {
         this.config.isActive = false;
         this.config.isExpired = true;
-        this.config.error = 'Upstox Access Token has expired (401 Unauthorized).';
+        this.config.error = 'Upstox Token has expired or is invalid (401 Unauthorized). Please update your Analytics Token in settings.';
       }
       return merged;
     }

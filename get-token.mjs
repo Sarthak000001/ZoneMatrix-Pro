@@ -42,8 +42,99 @@ function updateEnvFile(keyValues) {
 
 async function main() {
   console.log('\n======================================================');
-  console.log('       Upstox API v2 - Access Token Generator');
+  console.log('       Upstox API v2 - Token & Analytics Setup');
   console.log('======================================================\n');
+
+  console.log('💡 RECOMMENDED: 1-Year Upstox Analytics Token (No 3:30 AM Expiry)');
+  console.log('Unlike standard trading tokens that expire daily at 3:30 AM,');
+  console.log('Upstox Analytics Tokens remain active for 1 full year for');
+  console.log('streaming live quotes, prices, and historical candles.');
+  console.log('\nTo get your 1-Year Analytics Token:');
+  console.log('  1. Open https://developer.upstox.com/ and log in');
+  console.log('  2. Click on your App and select the "Analytics" tab');
+  console.log('  3. Click "Generate Token" and copy the token string\n');
+
+  const haveAnalytics = await prompt('Do you want to paste a 1-Year Analytics Token? (Y/n) [Y]: ');
+  if (!haveAnalytics.trim() || haveAnalytics.trim().toLowerCase().startsWith('y')) {
+    const rawToken = await prompt('\nPaste your Upstox Analytics Token: ');
+    const token = rawToken.trim();
+    if (!token) {
+      console.error('Error: No token entered.');
+      rl.close();
+      return;
+    }
+
+    console.log('\nValidating Analytics Token with Upstox Market Data API...');
+    try {
+      const testRes = await fetch('https://api.upstox.com/v2/market-quote/quotes?instrument_key=NSE_INDEX|Nifty 50', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!testRes.ok) {
+        const err = await testRes.json().catch(() => ({}));
+        const msg = err.errors?.[0]?.message || err.message || `Upstox returned status ${testRes.status}`;
+        console.error(`\nValidation failed: ${msg}`);
+        rl.close();
+        return;
+      }
+
+      // Try fetching profile if available
+      let userName = 'Upstox Analytics User';
+      try {
+        const profRes = await fetch('https://api.upstox.com/v2/user/profile', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
+        if (profRes.ok) {
+          const prof = await profRes.json();
+          userName = prof.data?.user_name || prof.data?.email || userName;
+        }
+      } catch {}
+
+      // Save to .env (primary secure source)
+      updateEnvFile({
+        UPSTOX_ANALYTICS_TOKEN: token,
+        UPSTOX_ACCESS_TOKEN: token
+      });
+
+      // Save to _cache/upstox-config.json
+      try {
+        const cacheDir = path.dirname(CONFIG_FILE);
+        if (fs.existsSync(cacheDir)) {
+          const configToSave = {
+            accessToken: token,
+            userName,
+            isActive: true,
+            isAnalytics: true,
+            lastValidated: new Date().toISOString()
+          };
+          fs.writeFileSync(CONFIG_FILE, JSON.stringify(configToSave, null, 2));
+        }
+      } catch {}
+
+      console.log('\n======================================================');
+      console.log(`SUCCESS! 1-Year Analytics Token Configured (${userName})`);
+      console.log('======================================================');
+      console.log(`Token: ${token.slice(0, 15)}...${token.slice(-8)}`);
+      console.log(`Saved securely to .env as UPSTOX_ANALYTICS_TOKEN`);
+      console.log('🎉 No daily 3:30 AM expiration required!');
+      console.log('\nYou can now start the application:');
+      console.log('  npm start');
+      console.log('======================================================\n');
+    } catch (err) {
+      console.error('Validation error:', err.message);
+    } finally {
+      rl.close();
+    }
+    return;
+  }
+
+  console.log('\nProceeding with Standard OAuth Token Generator (Expires daily at 3:30 AM)...');
 
   // Load existing config if available
   let existing = {};
@@ -142,6 +233,7 @@ async function main() {
       UPSTOX_API_KEY: apiKey,
       UPSTOX_API_SECRET: apiSecret,
       UPSTOX_REDIRECT_URI: redirectUri,
+      UPSTOX_ANALYTICS_TOKEN: accessToken,
       UPSTOX_ACCESS_TOKEN: accessToken
     });
 

@@ -21,24 +21,25 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
-Edit `.env` with your Upstox credentials (if you want live NSE market data):
+Edit `.env` with your Upstox Analytics Token (recommended) for live NSE market data:
 ```env
 PORT=3000
-UPSTOX_API_KEY=your_upstox_api_key_here
-UPSTOX_API_SECRET=your_upstox_api_secret_here
-UPSTOX_REDIRECT_URI=http://localhost:3000
-UPSTOX_ACCESS_TOKEN=your_upstox_access_token_here
+# 1-Year Analytics Token (No daily 3:30 AM expiration!)
+UPSTOX_ANALYTICS_TOKEN=your_upstox_analytics_token_here
 ```
 > [!NOTE]
 > If no Upstox token is provided, the platform automatically runs in **Offline / Sample Data Mode**, using pre-cached instruments, reports, and candles for instant out-of-the-box exploration.
 
-### 3. Generate Upstox Access Token
-If you have Upstox developer credentials, generate or renew an access token with one command:
+### 3. Configure Upstox Analytics Token (No 3:30 AM Expiry)
+Upstox provides **1-Year Analytics Tokens** for read-only live market data without requiring daily OAuth re-authentication:
+1. Log in to [Upstox Developer Console](https://developer.upstox.com/)
+2. Open your App & click the **Analytics** tab
+3. Click **Generate Token** and copy the token
+4. Paste it directly into the website's top-right **Upstox** modal, or set it via terminal:
 ```bash
 npm run token
 # or: node get-token.mjs
 ```
-The token generator automatically writes your active token to `.env` (git-ignored) and connects your session.
 
 ### 4. Start the Terminal
 ```bash

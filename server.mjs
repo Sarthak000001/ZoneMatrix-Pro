@@ -440,11 +440,12 @@ const server = http.createServer(async (req, res) => {
           const status = upstox.saveConfig({ accessToken: '', apiKey: '', apiSecret: '', isActive: false });
           return sendJson(res, 200, { success: true, message: 'Disconnected from Upstox', status });
         }
-        if (!body.accessToken) {
-          return sendJson(res, 400, { error: 'Access token is required' });
+        const token = (body.accessToken || body.analyticsToken || '').trim();
+        if (!token) {
+          return sendJson(res, 400, { error: 'Upstox Analytics Token or Access Token is required' });
         }
         // Test token with Upstox API
-        const testResult = await upstox.validateToken(body.accessToken);
+        const testResult = await upstox.validateToken(token);
         if (!testResult.valid) {
           return sendJson(res, 401, {
             error: testResult.message || 'Invalid or expired Upstox token',
@@ -453,14 +454,15 @@ const server = http.createServer(async (req, res) => {
         }
         // Save token to .env and cache
         const status = upstox.saveConfig({
-          accessToken: body.accessToken.trim(),
+          accessToken: token,
           apiKey: (body.apiKey || '').trim(),
           apiSecret: (body.apiSecret || '').trim(),
           userName: testResult.user
         });
+        const tokenLabel = testResult.isAnalytics ? '1-Year Analytics Token (No 3:30 AM expiry)' : 'Access Token';
         return sendJson(res, 200, {
           success: true,
-          message: `Successfully connected to Upstox account (${testResult.user})`,
+          message: `Successfully connected to Upstox API (${testResult.user}) using ${tokenLabel}`,
           user: testResult.user,
           status
         });

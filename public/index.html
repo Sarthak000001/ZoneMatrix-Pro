@@ -1023,37 +1023,38 @@
             <div
               style="width:28px;height:28px;background:#6366f1;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:12px">
               UX</div>
-            <span class="modal-title">Connect Upstox API v2</span>
+            <span class="modal-title">Connect Upstox Live Data</span>
           </div>
           <button id="upstox-modal-close" class="close-btn" type="button"
             aria-label="Close Upstox dialog">&times;</button>
         </div>
 
         <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;line-height:1.5">
-          Connect your personal Upstox account to stream live market data, OHLCV candles, and real-time quotes directly
-          from the National Stock Exchange (NSE).
+          Connect Upstox to stream real-time NSE market quotes, live prices, and intraday candles for technical and zone analysis.
         </p>
 
         <div
-          style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:var(--radius-md);padding:10px 12px;font-size:12px;color:var(--text-muted);line-height:1.5;margin-bottom:6px">
+          style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);border-radius:var(--radius-md);padding:10px 12px;font-size:12px;color:var(--text-muted);line-height:1.5;margin-bottom:10px">
           <strong style="color:var(--text-main);display:flex;align-items:center;gap:6px;margin-bottom:4px">
-            <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#6366f1"></span>
-            Daily Token Requirement
+            <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981"></span>
+            Recommended: Upstox Analytics Token (1-Year Validity — No 3:30 AM Expiry)
           </strong>
-          Upstox access tokens are invalidated daily at 3:30 AM IST. You can generate today's token using either:
+          Unlike daily trading tokens that expire at 3:30 AM, Upstox <b>Analytics Tokens</b> are valid for <b>1 full year</b> and provide read-only market data and live quotes without daily renewal:
           <ul style="margin:6px 0 0 16px;padding:0">
-            <li>Terminal: run <code>npm run token</code> (OAuth login assistant)</li>
-            <li>Web: generate token in <a href="https://developer.upstox.com/" target="_blank"
-                style="color:var(--primary);text-decoration:none">Upstox Developer Portal</a> and paste below</li>
+            <li>Log in to the <a href="https://developer.upstox.com/" target="_blank"
+                style="color:var(--primary);text-decoration:none;font-weight:600">Upstox Developer Console &rarr;</a></li>
+            <li>Select your App &rarr; click the <b>Analytics</b> tab</li>
+            <li>Click <b>Generate Token</b>, then copy and paste it into the field below</li>
+            <li><i>(Terminal option: run <code>npm run token</code> in terminal)</i></li>
           </ul>
         </div>
 
         <div style="display:flex;flex-direction:column;gap:14px">
           <div>
             <label style="font-size:12px;font-weight:600;color:var(--text-main);display:block;margin-bottom:6px">Upstox
-              Access Token <span style="color:#ef4444">*</span></label>
+              Analytics / Access Token <span style="color:#ef4444">*</span></label>
             <input type="password" id="input-upstox-token" class="symbol-input"
-              placeholder="Paste your Upstox Access Token"
+              placeholder="Paste your 1-Year Upstox Analytics Token"
               style="padding-left:12px;font-family:'JetBrains Mono',monospace">
           </div>
 
@@ -1070,7 +1071,7 @@
           <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
             <a href="https://developer.upstox.com/" target="_blank"
               style="font-size:12px;color:var(--primary);text-decoration:none">
-              Get Token from Upstox Developer &rarr;
+              Open Upstox Developer &rarr;
             </a>
             <div style="display:flex;gap:10px">
               <button id="btn-upstox-disconnect" class="btn-icon-text"

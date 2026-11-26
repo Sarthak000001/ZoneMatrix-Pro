@@ -623,7 +623,7 @@
     if (isLiveUpstox) {
       liveBadge = `<span class="badge" title="Live sync from Upstox. Price and zones refresh every 10 seconds." style="background:rgba(16,185,129,0.18);color:#10b981;border:1px solid rgba(16,185,129,0.4);font-weight:700;display:inline-flex;align-items:center;gap:5px"><span class="laser-dot" style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block;box-shadow:0 0 6px #10b981"></span> LIVE UPSTOX ${syncClock}</span>`;
     } else if (providerStatus && providerStatus.isExpired) {
-      liveBadge = `<span class="badge" title="Upstox token expired. Click 'Upstox' in top navbar to renew." style="background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:700;display:inline-flex;align-items:center;gap:5px;cursor:pointer" onclick="document.getElementById('upstox-modal').classList.add('open')"><span style="width:6px;height:6px;border-radius:50%;background:#ef4444;display:inline-block"></span> TOKEN EXPIRED (CLICK TO RENEW)</span>`;
+      liveBadge = `<span class="badge" title="Upstox token expired. Click to update Analytics Token." style="background:rgba(239,68,68,0.18);color:#f87171;border:1px solid rgba(239,68,68,0.4);font-weight:700;display:inline-flex;align-items:center;gap:5px;cursor:pointer" onclick="document.getElementById('upstox-modal').classList.add('open')"><span style="width:6px;height:6px;border-radius:50%;background:#ef4444;display:inline-block"></span> TOKEN EXPIRED (CLICK TO RENEW)</span>`;
     } else if (candleSource === 'yahoo_nse') {
       liveBadge = `<span class="badge" title="Daily NSE history for this symbol" style="background:rgba(96,165,250,0.16);color:#60a5fa;border:1px solid rgba(96,165,250,0.35);font-weight:700">NSE HISTORY</span>`;
     } else {
@@ -1800,13 +1800,15 @@
 
     if (status && status.configured && status.isActive && !status.isExpired) {
       if (dot) dot.style.background = '#10b981';
-      if (text) text.innerHTML = `Upstox: <b>Connected (Live)</b>`;
+      const isAnalytics = status.isAnalytics !== false;
+      if (text) text.innerHTML = isAnalytics ? `Upstox: <b>Live (Analytics)</b>` : `Upstox: <b>Connected (Live)</b>`;
       if (btnDisconnect) btnDisconnect.style.display = 'inline-flex';
       if (banner) {
         banner.style.display = 'block';
         banner.style.background = 'rgba(16, 185, 129, 0.15)';
         banner.style.color = '#34d399';
-        banner.innerHTML = `<strong>Connected to Upstox API v2</strong> (${status.userId || status.maskedToken || 'Active'}). Live NSE market data streaming is active.`;
+        const expInfo = status.expiresAt ? ` (Valid until ${new Date(status.expiresAt).toLocaleDateString('en-IN')})` : '';
+        banner.innerHTML = `<strong>Connected to Upstox Live Data</strong> (${status.userId || 'Analytics User'}). Live NSE market streaming active.<br><span style="font-size:11px;color:var(--text-muted)">${status.tokenType || '1-Year Analytics Token'}${expInfo} — no daily 3:30 AM expiration.</span>`;
       }
     } else if (status && status.isExpired) {
       if (dot) dot.style.background = '#ef4444';
@@ -1816,7 +1818,7 @@
         banner.style.display = 'block';
         banner.style.background = 'rgba(239, 68, 68, 0.15)';
         banner.style.color = '#f87171';
-        banner.innerHTML = `<strong>Upstox Token Expired:</strong> ${status.error || 'Upstox tokens expire daily at 3:30 AM IST.'}<br><span style="color:var(--text-muted);font-size:11px;margin-top:4px;display:inline-block">To sync live data: run <code>npm run token</code> in terminal, or paste today's active token below.</span>`;
+        banner.innerHTML = `<strong>Upstox Token Expired:</strong> ${status.error || 'Token has expired.'}<br><span style="color:var(--text-muted);font-size:11px;margin-top:4px;display:inline-block">To avoid daily 3:30 AM expiry, generate a 1-year <b>Analytics Token</b> in the <a href="https://developer.upstox.com/" target="_blank" style="color:#60a5fa">Upstox Developer Console</a> &rarr; Analytics tab.</span>`;
       }
     } else {
       if (dot) dot.style.background = '#eab308';
