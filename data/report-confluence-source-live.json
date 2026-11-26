@@ -1,11 +1,11 @@
 {
   "updatedAt": "2026-10-29T05:36:13.833Z",
   "error": null,
-  "nseListed": 497,
-  "symbolsChecked": 497,
-  "symbolsWithHistory": 490,
-  "universe": "nifty500",
-  "universeLabel": "Nifty 500",
+  "nseListed": 3074,
+  "symbolsChecked": 3074,
+  "symbolsWithHistory": 2911,
+  "universe": "all",
+  "universeLabel": "All Listed Instruments",
   "reportStatus": "ready",
   "purpose": "MIT",
   "preset": {

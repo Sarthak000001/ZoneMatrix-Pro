@@ -858,7 +858,7 @@
     const progressBar = document.getElementById('zones-progress-bar');
     const btnBuild = document.getElementById('zones-btn-build');
 
-    const totalScanTarget = universe === 'all' ? 3074 : (universe === 'nifty500' ? 497 : (universe === 'nifty100' ? 100 : 50));
+    const totalScanTarget = universe === 'nifty500' ? 497 : (universe === 'nifty100' ? 100 : (universe === 'nifty50' ? 50 : 3074));
     if (options.isBuild && progressSlot) {
       progressSlot.style.display = 'block';
       if (btnBuild) {
@@ -885,7 +885,9 @@
       zonesDataRows = data.rows || [];
 
       // Update KPIs
-      const scannedFormatted = (data.symbolsChecked || 3074).toLocaleString();
+      const fallbackScanned = universe === 'nifty500' ? 497 : (universe === 'nifty100' ? 100 : (universe === 'nifty50' ? 50 : 3074));
+      const fallbackWithData = universe === 'nifty500' ? 496 : (universe === 'nifty100' ? 100 : (universe === 'nifty50' ? 50 : 2911));
+      const scannedFormatted = (data.symbolsChecked || fallbackScanned).toLocaleString();
       document.getElementById('kpi-zones-scanned').textContent = scannedFormatted;
       document.getElementById('kpi-zones-tradeable').textContent = zonesDataRows.length;
       const avgScoreEl = document.getElementById('kpi-zones-avg-score');
@@ -904,7 +906,7 @@
       const sumScanned = document.getElementById('zones-sum-scanned');
       if (sumScanned) sumScanned.textContent = scannedFormatted;
       const sumWithData = document.getElementById('zones-sum-withdata');
-      if (sumWithData) sumWithData.textContent = (data.symbolsWithHistory || 2911).toLocaleString();
+      if (sumWithData) sumWithData.textContent = (data.symbolsWithHistory || fallbackWithData).toLocaleString();
       const sumUpdated = document.getElementById('zones-sum-updated');
       if (sumUpdated) {
         const timeStr = data.syncedAt || data.updatedAt ? new Date(data.syncedAt || data.updatedAt).toLocaleTimeString() : 'just now';
@@ -1204,7 +1206,7 @@
     const progressBar = document.getElementById('conf-progress-bar');
     const btnBuild = document.getElementById('conf-btn-build');
 
-    const totalScanTarget = universe === 'all' ? 3074 : (universe === 'nifty500' ? 497 : (universe === 'nifty100' ? 100 : 50));
+    const totalScanTarget = universe === 'nifty500' ? 497 : (universe === 'nifty100' ? 100 : (universe === 'nifty50' ? 50 : 3074));
     if (options.isBuild && progressSlot) {
       progressSlot.style.display = 'block';
       if (btnBuild) {
@@ -1243,13 +1245,15 @@
       }
 
       // Update Summary Line
-      const confScannedFormatted = (data.symbolsChecked || 3074).toLocaleString();
+      const confFallbackScanned = universe === 'nifty500' ? 497 : (universe === 'nifty100' ? 100 : (universe === 'nifty50' ? 50 : 3074));
+      const confFallbackWithData = universe === 'nifty500' ? 490 : (universe === 'nifty100' ? 100 : (universe === 'nifty50' ? 50 : 2911));
+      const confScannedFormatted = (data.symbolsChecked || confFallbackScanned).toLocaleString();
       const sumRows = document.getElementById('conf-sum-rows');
       if (sumRows) sumRows.textContent = confluenceDataRows.length;
       const sumScanned = document.getElementById('conf-sum-scanned');
       if (sumScanned) sumScanned.textContent = confScannedFormatted;
       const sumWithData = document.getElementById('conf-sum-withdata');
-      if (sumWithData) sumWithData.textContent = (data.symbolsWithHistory || 2911).toLocaleString();
+      if (sumWithData) sumWithData.textContent = (data.symbolsWithHistory || confFallbackWithData).toLocaleString();
       const sumUpdated = document.getElementById('conf-sum-updated');
       if (sumUpdated) {
         const timeStr = data.syncedAt || data.updatedAt ? new Date(data.syncedAt || data.updatedAt).toLocaleTimeString() : 'just now';

@@ -890,16 +890,25 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      const universeLabel = (universesData.universes || []).find(u => u.key === universe)?.label || (universe === 'all' ? 'All Listed Instruments' : 'Nifty 500');
+      const universeLabel = (universe === 'all' || !universe) ? 'All Listed Instruments' : ((universesData.universes || []).find(u => u.key === universe)?.label || universe);
       const hasLiveQuotes = zoneQuote.source === 'upstox_live' || (upstoxStatus.isActive && enrichedRows.some(r => r.priceSource === 'upstox_live' || r.dataQuality === 'live_upstox'));
       const effectiveSource = hasLiveQuotes ? 'upstox_live' : 'snapshot';
 
-      const totalUniverseSymbols = universe === 'nifty50' ? 50 : 
-                                   (universe === 'nifty100' ? 100 : 
-                                   (universe === 'nifty500' ? 497 : (instrumentsData.instruments?.length || 3074)));
-      const withDataSymbols = universe === 'nifty50' ? 50 : 
-                              (universe === 'nifty100' ? 100 : 
-                              (universe === 'nifty500' ? 496 : 2911));
+      let totalUniverseSymbols = 3074;
+      let withDataSymbols = 2911;
+      if (universe === 'nifty500') {
+        totalUniverseSymbols = 497;
+        withDataSymbols = 496;
+      } else if (universe === 'nifty100') {
+        totalUniverseSymbols = 100;
+        withDataSymbols = 100;
+      } else if (universe === 'nifty50') {
+        totalUniverseSymbols = 50;
+        withDataSymbols = 50;
+      } else {
+        totalUniverseSymbols = 3074;
+        withDataSymbols = 2911;
+      }
 
       return sendJson(res, 200, {
         updatedAt: new Date().toISOString(),
@@ -1070,12 +1079,21 @@ const server = http.createServer(async (req, res) => {
       const hasLiveConfluence = confluenceQuote.source === 'upstox_live' || (confStatus.isActive && rows.some(r => r.priceSource === 'upstox_live' || r.dataQuality === 'live_upstox'));
       const effectiveConfSource = hasLiveConfluence ? 'upstox_live' : 'snapshot';
 
-      const totalConfSymbols = universe === 'nifty50' ? 50 : 
-                               (universe === 'nifty100' ? 100 : 
-                               (universe === 'nifty500' ? 497 : (instrumentsData.instruments?.length || 3074)));
-      const withDataConfSymbols = universe === 'nifty50' ? 50 : 
-                                  (universe === 'nifty100' ? 100 : 
-                                  (universe === 'nifty500' ? 490 : 2911));
+      let totalConfSymbols = 3074;
+      let withDataConfSymbols = 2911;
+      if (universe === 'nifty500') {
+        totalConfSymbols = 497;
+        withDataConfSymbols = 490;
+      } else if (universe === 'nifty100') {
+        totalConfSymbols = 100;
+        withDataConfSymbols = 100;
+      } else if (universe === 'nifty50') {
+        totalConfSymbols = 50;
+        withDataConfSymbols = 50;
+      } else {
+        totalConfSymbols = 3074;
+        withDataConfSymbols = 2911;
+      }
 
       return sendJson(res, 200, {
         ...base,
@@ -1262,7 +1280,12 @@ const server = http.createServer(async (req, res) => {
       res.end(`Server Error: ${err.message}`);
       return;
     }
-    res.writeHead(200, { 'Content-Type': contentType });
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
     res.end(content);
   });
 });
