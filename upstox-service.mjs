@@ -730,9 +730,26 @@ class UpstoxService {
     const data = await res.json();
     const fresh = data.data || {};
     for (const [responseKey, quote] of Object.entries(fresh)) {
-      const requestKey = missing.find(k => k === responseKey || k.replace('|', ':') === responseKey) || responseKey.replace(':', '|');
+      const token = quote?.instrument_token;
+      const cleanToken = token ? token.replace(':', '|') : null;
+      const pipeResponse = responseKey.replace(':', '|');
+
+      const requestKey = missing.find(k => 
+        k === responseKey || 
+        k === pipeResponse ||
+        (token && (k === token || k === cleanToken))
+      ) || token || responseKey;
+
       this.quoteCache.set(requestKey, { at: now, quote, responseKey });
+      this.quoteCache.set(responseKey, { at: now, quote, responseKey });
+      this.quoteCache.set(pipeResponse, { at: now, quote, responseKey });
+      if (token) this.quoteCache.set(token, { at: now, quote, responseKey });
+      if (cleanToken) this.quoteCache.set(cleanToken, { at: now, quote, responseKey });
+
       merged[responseKey] = quote;
+      merged[pipeResponse] = quote;
+      if (token) merged[token] = quote;
+      if (cleanToken) merged[cleanToken] = quote;
     }
     return merged;
   }

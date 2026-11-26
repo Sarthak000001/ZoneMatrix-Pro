@@ -444,7 +444,7 @@
       <div class="kpi-grid">
         <div class="kpi-card">
           <span class="kpi-label">Universe Scanned</span>
-          <span id="kpi-zones-scanned" class="kpi-value">497</span>
+          <span id="kpi-zones-scanned" class="kpi-value">3,074</span>
         </div>
         <div class="kpi-card">
           <span class="kpi-label">Tradeable Qualified</span>
@@ -547,10 +547,10 @@
         <div class="filter-item">
           <span>Universe:</span>
           <select id="zones-filter-universe" class="filter-select">
-            <option value="all">All listed instruments</option>
-            <option value="nifty500" selected>Nifty 500</option>
-            <option value="nifty50">Nifty 50</option>
-            <option value="nifty100">Nifty 100</option>
+            <option value="all" selected>All Listed Instruments (3,000+ NSE Stocks)</option>
+            <option value="nifty500">Nifty 500 (Top 500 Liquid)</option>
+            <option value="nifty100">Nifty 100 (Large Cap)</option>
+            <option value="nifty50">Nifty 50 (Blue Chip)</option>
             <option value="niftyauto">Nifty Auto</option>
             <option value="niftybank">Nifty Bank</option>
             <option value="niftyit">Nifty IT</option>
@@ -574,8 +574,8 @@
       <div class="report-summary-line">
         <span>Settings: <strong id="zones-sum-settings" style="color:#70e5ba">Saved</strong></span>
         <span>Status <strong id="zones-sum-status">Ready</strong></span>
-        <span>Scanned <strong id="zones-sum-scanned">497</strong></span>
-        <span>With data <strong id="zones-sum-withdata">496</strong></span>
+        <span>Scanned <strong id="zones-sum-scanned">3,074</strong></span>
+        <span>With data <strong id="zones-sum-withdata">2,911</strong></span>
         <span>Rows <strong id="zones-sum-rows" style="color:#60a5fa">50</strong></span>
         <span id="zones-sum-updated">Updated just now</span>
         <span class="report-sort-hint">Sort: click a column; Shift/Ctrl/Cmd-click to sort</span>
@@ -585,8 +585,8 @@
       <div id="zones-progress-slot" style="display:none">
         <div class="report-build-progress">
           <div class="report-progress-copy">
-            <strong id="zones-progress-title">Building: 0 / 497 symbols (0%)</strong>
-            <span id="zones-progress-meta">With data 496 · Rows found 0</span>
+            <strong id="zones-progress-title">Building: 0 / 3,074 symbols (0%)</strong>
+            <span id="zones-progress-meta">With data 2,911 · Rows found 0</span>
           </div>
           <div class="report-progress-track">
             <span id="zones-progress-bar" style="width:0%"></span>
@@ -680,9 +680,10 @@
         <div class="filter-item">
           <span>Universe:</span>
           <select id="conf-filter-universe" class="filter-select">
-            <option value="all">All loaded NSE</option>
-            <option value="nifty500" selected>Nifty 500</option>
-            <option value="nifty50">Nifty 50</option>
+            <option value="all" selected>All Loaded NSE (3,000+ Stocks)</option>
+            <option value="nifty500">Nifty 500 (Top 500 Liquid)</option>
+            <option value="nifty100">Nifty 100 (Large Cap)</option>
+            <option value="nifty50">Nifty 50 (Blue Chip)</option>
           </select>
         </div>
         <div class="filter-item">
@@ -782,8 +783,8 @@
       <div class="report-summary-line">
         <span>Settings: <strong id="conf-sum-settings" style="color:#70e5ba">Saved</strong></span>
         <span>Status <strong id="conf-sum-status">Ready</strong></span>
-        <span>Scanned <strong id="conf-sum-scanned">497</strong></span>
-        <span>With data <strong id="conf-sum-withdata">490</strong></span>
+        <span>Scanned <strong id="conf-sum-scanned">3,074</strong></span>
+        <span>With data <strong id="conf-sum-withdata">2,911</strong></span>
         <span>Rows <strong id="conf-sum-rows" style="color:#60a5fa">0</strong></span>
         <span id="conf-sum-updated">Updated just now</span>
         <span class="report-sort-hint">Sort: click a column; Shift/Ctrl/Cmd-click to add columns</span>
@@ -793,8 +794,8 @@
       <div id="conf-progress-slot" style="display:none">
         <div class="report-build-progress">
           <div class="report-progress-copy">
-            <strong id="conf-progress-title">Building: 0 / 497 symbols (0%)</strong>
-            <span id="conf-progress-meta">With data 490 · Rows found 0</span>
+            <strong id="conf-progress-title">Building: 0 / 3,074 symbols (0%)</strong>
+            <span id="conf-progress-meta">With data 2,911 · Rows found 0</span>
           </div>
           <div class="report-progress-track">
             <span id="conf-progress-bar" style="width:0%"></span>

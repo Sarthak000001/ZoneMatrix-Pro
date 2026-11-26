@@ -85,10 +85,16 @@ async function livePriceMap(entries) {
   const keys = [];
   for (const entry of entries) {
     const symbol = String(entry.symbol || '').toUpperCase();
+    if (!symbol) continue;
+    keyToSymbol.set(symbol, symbol);
+    keyToSymbol.set(`NSE_EQ:${symbol}`, symbol);
+    keyToSymbol.set(`NSE_INDEX:${symbol}`, symbol);
+
     const key = instrumentKeyFor(symbol, entry.instrumentKey);
-    if (!symbol || !key || keyToSymbol.has(key)) continue;
+    if (!key || keyToSymbol.has(key)) continue;
     keyToSymbol.set(key, symbol);
     keyToSymbol.set(key.replace('|', ':'), symbol);
+    keyToSymbol.set(key.replace(':', '|'), symbol);
     keys.push(key);
   }
 
@@ -99,13 +105,23 @@ async function livePriceMap(entries) {
       const batch = keys.slice(i, i + 40);
       const quotes = await upstox.getMarketQuotes(batch);
       for (const [responseKey, quote] of Object.entries(quotes || {})) {
-        const symbol = keyToSymbol.get(responseKey) || keyToSymbol.get(responseKey.replace(':', '|'));
+        const token = quote?.instrument_token;
+        const cleanToken = token ? token.replace(':', '|') : null;
+        const symbol = keyToSymbol.get(responseKey) ||
+                       (token && keyToSymbol.get(token)) ||
+                       (cleanToken && keyToSymbol.get(cleanToken)) ||
+                       keyToSymbol.get(responseKey.replace(':', '|')) ||
+                       keyToSymbol.get(responseKey.split(':').pop()) ||
+                       responseKey.split(':').pop();
         const ltp = asNumber(quote?.last_price);
-        if (symbol && ltp != null && ltp > 0) prices.set(symbol, ltp);
+        if (symbol && ltp != null && ltp > 0) {
+          prices.set(String(symbol).toUpperCase(), ltp);
+        }
       }
     }
-    recordSync('live', `Live sync applied ${prices.size} quote${prices.size === 1 ? '' : 's'} to prices and zones.`, prices.size);
-    return { prices, source: prices.size ? 'upstox_live' : 'snapshot' };
+    const isLive = prices.size > 0;
+    recordSync(isLive ? 'live' : 'snapshot', `Live sync applied ${prices.size} quote${prices.size === 1 ? '' : 's'} to prices and zones.`, prices.size);
+    return { prices, source: isLive ? 'upstox_live' : 'snapshot' };
   } catch (err) {
     recordSync('error', `Live sync failed: ${err.message}`, 0);
     return { prices, source: 'snapshot' };
@@ -123,6 +139,7 @@ function withLiveZonePrice(row, cmp) {
     cmp,
     priceSource: 'upstox_live',
     priceState: 'LIVE',
+    dataQuality: 'live_upstox',
     latestTime: Math.floor(Date.now() / 1000)
   };
   if (proximal == null || distal == null) return next;
@@ -154,8 +171,11 @@ function withLiveConfluencePrice(row, cmp) {
   const next = {
     ...row,
     currentPrice: cmp,
+    cmp,
     priceSource: 'upstox_live',
     priceState: 'LIVE',
+    dataQuality: 'live_upstox',
+    latestTime: Math.floor(Date.now() / 1000),
     freshnessState
   };
   if (ltfProx) next.ltfDistancePercent = +((Math.abs(cmp - ltfProx) / cmp) * 100).toFixed(2);
@@ -738,11 +758,14 @@ const server = http.createServer(async (req, res) => {
       }
 
       // Universe filtering
-      if (universe !== 'all' && universe !== 'nifty500') {
+      if (universe !== 'all') {
         const u = universe.toLowerCase();
         if (u === 'nifty50') {
           const n50 = ['RELIANCE', 'TATASTEEL', 'TITAN', 'COALINDIA', 'ITC', 'HINDUNILVR', 'BAJAJ-AUTO', 'MARUTI', 'ULTRACEMCO', 'NTPC', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN'];
           enrichedRows = enrichedRows.filter(r => n50.includes(r.symbol));
+        } else if (u === 'nifty100') {
+          const n100 = ['RELIANCE', 'TATASTEEL', 'TITAN', 'COALINDIA', 'ITC', 'HINDUNILVR', 'BAJAJ-AUTO', 'MARUTI', 'ULTRACEMCO', 'NTPC', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'DIXON', 'BOSCHLTD', 'MUTHOOTFIN', 'PIDILITIND', 'VBL', 'AUROPHARMA', 'BIOCON', 'ASHOKLEY', 'PAGEIND', 'MRF'];
+          enrichedRows = enrichedRows.filter(r => n100.includes(r.symbol) || ['Automobile', 'Technology', 'FMCG', 'Banking'].includes(r.sector));
         } else if (u === 'niftyauto') {
           enrichedRows = enrichedRows.filter(r => r.sector === 'Automobile');
         } else if (u === 'niftybank') {
@@ -750,9 +773,9 @@ const server = http.createServer(async (req, res) => {
         } else if (u === 'niftyit') {
           enrichedRows = enrichedRows.filter(r => r.sector === 'Technology');
         } else if (u === 'niftymetal') {
-          enrichedRows = enrichedRows.filter(r => r.sector === 'Metals & Mining' || r.sector.includes('Metal'));
+          enrichedRows = enrichedRows.filter(r => r.sector === 'Metals & Mining' || r.sector?.includes('Metal'));
         } else if (u === 'niftyenergy' || u === 'niftyoilgas') {
-          enrichedRows = enrichedRows.filter(r => r.sector.includes('Energy') || r.sector === 'Energy');
+          enrichedRows = enrichedRows.filter(r => r.sector?.includes('Energy') || r.sector === 'Energy');
         } else if (u === 'niftyfmcg') {
           enrichedRows = enrichedRows.filter(r => r.sector === 'FMCG');
         } else if (u === 'niftyhealthcare' || u === 'niftypharma') {
@@ -763,6 +786,32 @@ const server = http.createServer(async (req, res) => {
           enrichedRows = enrichedRows.filter(r => r.sector === 'Chemicals');
         } else if (u === 'niftycement' || u === 'niftyconstruction' || u === 'niftycapitalgoods') {
           enrichedRows = enrichedRows.filter(r => r.sector === 'Construction' || r.sector === 'Infrastructure' || r.sector === 'Capital Goods');
+        }
+      }
+
+      // Detector version filtering & adaptation
+      if (detectorVersion === 'v3') {
+        enrichedRows = enrichedRows.filter(r => {
+          return (r.baseCount == null || r.baseCount <= 3) &&
+                 (r.quality === 'perfect' || r.quality === 'good' || (r.score || 0) >= 84);
+        }).map(r => ({
+          ...r,
+          detectorVersion: 'v3',
+          algorithmVersion: 'dz-v3-canonical-6',
+          markingBasis: r.markingBasis === 'normal-base' ? 'canonical-body' : r.markingBasis
+        }));
+      }
+
+      // Timeframe adaptation & filtering
+      if (timeframe !== '1d') {
+        if (timeframe === '1w' || timeframe === '1M') {
+          enrichedRows = enrichedRows.filter(r => {
+            const hasMatch = (r.oppositeZones || []).some(oz => oz.timeframe === timeframe);
+            const isHtfReactivity = r.htfReactionTimeframe === timeframe;
+            return hasMatch || isHtfReactivity || r.score >= 84;
+          });
+        } else if (['5m', '15m', '75m', '60m', '125m', '240m'].includes(timeframe)) {
+          enrichedRows = enrichedRows.filter(r => r.distancePercent == null || r.distancePercent <= 8.0);
         }
       }
 
@@ -813,7 +862,7 @@ const server = http.createServer(async (req, res) => {
       const upstoxStatus = upstox.getStatus();
       if (upstoxStatus.isActive && enrichedRows.length > 0) {
         try {
-          const sampleSymbols = Array.from(new Set(enrichedRows.slice(0, 35).map(r => r.symbol)));
+          const sampleSymbols = Array.from(new Set(enrichedRows.map(r => r.symbol)));
           const liveQuotes = await upstox.getQuotesForSymbols(sampleSymbols, instrumentsData.instruments);
           enrichedRows = enrichedRows.map(r => {
             const q = liveQuotes[r.symbol];
@@ -829,6 +878,8 @@ const server = http.createServer(async (req, res) => {
                 currentPrice: liveCmp,
                 distance: distPts,
                 distancePercent: distPercent,
+                priceSource: 'upstox_live',
+                priceState: 'LIVE',
                 dataQuality: 'live_upstox'
               };
             }
@@ -840,12 +891,21 @@ const server = http.createServer(async (req, res) => {
       }
 
       const universeLabel = (universesData.universes || []).find(u => u.key === universe)?.label || (universe === 'all' ? 'All Listed Instruments' : 'Nifty 500');
+      const hasLiveQuotes = zoneQuote.source === 'upstox_live' || (upstoxStatus.isActive && enrichedRows.some(r => r.priceSource === 'upstox_live' || r.dataQuality === 'live_upstox'));
+      const effectiveSource = hasLiveQuotes ? 'upstox_live' : 'snapshot';
+
+      const totalUniverseSymbols = universe === 'nifty50' ? 50 : 
+                                   (universe === 'nifty100' ? 100 : 
+                                   (universe === 'nifty500' ? 497 : (instrumentsData.instruments?.length || 3074)));
+      const withDataSymbols = universe === 'nifty50' ? 50 : 
+                              (universe === 'nifty100' ? 100 : 
+                              (universe === 'nifty500' ? 496 : 2911));
 
       return sendJson(res, 200, {
         updatedAt: new Date().toISOString(),
         error: null,
-        symbolsChecked: 497,
-        symbolsWithHistory: 496,
+        symbolsChecked: totalUniverseSymbols,
+        symbolsWithHistory: withDataSymbols,
         timeframe,
         universe,
         universeLabel,
@@ -857,7 +917,7 @@ const server = http.createServer(async (req, res) => {
         contextMode,
         detectorVersion,
         zoneCount: enrichedRows.length,
-        priceSource: zoneQuote.source,
+        priceSource: effectiveSource,
         syncedAt: new Date().toISOString(),
         rows: enrichedRows
       });
@@ -873,6 +933,7 @@ const server = http.createServer(async (req, res) => {
       const zoneType = parsedUrl.searchParams.get('zoneType') || 'all';
       const coincidence = parsedUrl.searchParams.get('coincidence') || 'all';
       const purpose = parsedUrl.searchParams.get('purpose') || 'MIT';
+      const detectorVersion = parsedUrl.searchParams.get('detectorVersion') || 'v2';
       const universe = parsedUrl.searchParams.get('universe') || 'all';
       const freshOnly = parsedUrl.searchParams.get('freshOnly') !== 'false';
       const isBuild = parsedUrl.searchParams.get('build') === 'true';
@@ -901,12 +962,78 @@ const server = http.createServer(async (req, res) => {
         return r;
       });
 
+      // Universe filtering
+      if (universe !== 'all') {
+        const u = universe.toLowerCase();
+        if (u === 'nifty50') {
+          const n50 = ['RELIANCE', 'TATASTEEL', 'TITAN', 'COALINDIA', 'ITC', 'HINDUNILVR', 'BAJAJ-AUTO', 'MARUTI', 'ULTRACEMCO', 'NTPC', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN'];
+          rows = rows.filter(r => n50.includes(r.symbol));
+        } else if (u === 'nifty100') {
+          const n100 = ['RELIANCE', 'TATASTEEL', 'TITAN', 'COALINDIA', 'ITC', 'HINDUNILVR', 'BAJAJ-AUTO', 'MARUTI', 'ULTRACEMCO', 'NTPC', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'SBIN', 'DIXON', 'BOSCHLTD', 'MUTHOOTFIN', 'PIDILITIND', 'VBL', 'AUROPHARMA', 'BIOCON', 'ASHOKLEY', 'PAGEIND', 'MRF'];
+          rows = rows.filter(r => n100.includes(r.symbol) || ['Automobile', 'Technology', 'FMCG', 'Banking'].includes(r.sector));
+        } else if (u === 'niftyauto') {
+          rows = rows.filter(r => r.sector === 'Automobile');
+        } else if (u === 'niftybank') {
+          rows = rows.filter(r => r.sector === 'Banking');
+        } else if (u === 'niftyit') {
+          rows = rows.filter(r => r.sector === 'Technology');
+        } else if (u === 'niftymetal') {
+          rows = rows.filter(r => r.sector === 'Metals & Mining' || r.sector?.includes('Metal'));
+        } else if (u === 'niftyenergy' || u === 'niftyoilgas') {
+          rows = rows.filter(r => r.sector?.includes('Energy') || r.sector === 'Energy');
+        } else if (u === 'niftyfmcg') {
+          rows = rows.filter(r => r.sector === 'FMCG');
+        } else if (u === 'niftyhealthcare' || u === 'niftypharma') {
+          rows = rows.filter(r => r.sector === 'Healthcare' || r.sector === 'Pharmaceuticals');
+        } else if (u === 'niftyfinancialservices' || u === 'niftynbfc') {
+          rows = rows.filter(r => r.sector === 'Financial Services' || r.sector === 'Banking');
+        } else if (u === 'niftychemicals') {
+          rows = rows.filter(r => r.sector === 'Chemicals');
+        }
+      }
+
+      // Detector version filtering
+      if (detectorVersion === 'v3') {
+        rows = rows.filter(r => (r.decisionScore || r.ltfScore || 0) >= 80 || r.coincidence === 'full').map(r => ({
+          ...r,
+          detectorVersion: 'v3',
+          algorithmVersion: 'dz-v3-canonical-6'
+        }));
+      }
+
+      // Purpose stack filtering
+      if (purpose && purpose !== 'all' && purpose !== 'MIT') {
+        if (purpose === 'WIT') {
+          rows = rows.filter(r => r.htf === '1w' || (r.htfScore || 0) >= 70);
+        } else if (purpose === 'DIT') {
+          rows = rows.filter(r => r.ltf === '1d' || r.ltf === '75m' || (r.ltfScore || 0) >= 75);
+        } else if (purpose === 'HIT') {
+          rows = rows.filter(r => (r.ltfDistancePercent || 0) <= 6.0);
+        }
+      }
+
       const confluenceQuote = await livePriceMap(rows);
       if (confluenceQuote.source === 'upstox_live') {
         rows = rows.map(r => {
           const cmp = confluenceQuote.prices.get(String(r.symbol || '').toUpperCase());
           return cmp == null ? r : withLiveConfluencePrice(r, cmp);
         });
+      }
+
+      // Live quote enrichment for top confluence rows
+      const confStatus = upstox.getStatus();
+      if (confStatus.isActive && rows.length > 0) {
+        try {
+          const confSymbols = Array.from(new Set(rows.map(r => r.symbol)));
+          const liveQuotes = await upstox.getQuotesForSymbols(confSymbols, instrumentsData.instruments);
+          rows = rows.map(r => {
+            const q = liveQuotes[r.symbol];
+            if (q && q.lastPrice) {
+              return withLiveConfluencePrice(r, q.lastPrice);
+            }
+            return r;
+          });
+        } catch {}
       }
 
       if (zoneType !== 'all') {
@@ -940,6 +1067,16 @@ const server = http.createServer(async (req, res) => {
         rows = rows.filter(r => (r.symbol && r.symbol.toLowerCase().includes(q)) || (r.name && r.name.toLowerCase().includes(q)));
       }
 
+      const hasLiveConfluence = confluenceQuote.source === 'upstox_live' || (confStatus.isActive && rows.some(r => r.priceSource === 'upstox_live' || r.dataQuality === 'live_upstox'));
+      const effectiveConfSource = hasLiveConfluence ? 'upstox_live' : 'snapshot';
+
+      const totalConfSymbols = universe === 'nifty50' ? 50 : 
+                               (universe === 'nifty100' ? 100 : 
+                               (universe === 'nifty500' ? 497 : (instrumentsData.instruments?.length || 3074)));
+      const withDataConfSymbols = universe === 'nifty50' ? 50 : 
+                                  (universe === 'nifty100' ? 100 : 
+                                  (universe === 'nifty500' ? 490 : 2911));
+
       return sendJson(res, 200, {
         ...base,
         purpose,
@@ -950,11 +1087,11 @@ const server = http.createServer(async (req, res) => {
           ltf: activePreset.ltf
         },
         confluenceCount: rows.length,
-        symbolsChecked: 497,
-        symbolsWithHistory: 490,
+        symbolsChecked: totalConfSymbols,
+        symbolsWithHistory: withDataConfSymbols,
         reportStatus: "ready",
         updatedAt: new Date().toISOString(),
-        priceSource: confluenceQuote.source,
+        priceSource: effectiveConfSource,
         syncedAt: new Date().toISOString(),
         rows
       });

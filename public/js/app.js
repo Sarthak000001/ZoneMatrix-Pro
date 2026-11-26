@@ -821,7 +821,7 @@
 
   // Zone Distance Report
   async function loadZonesReport(options = {}) {
-    const universe = document.getElementById('zones-filter-universe')?.value || 'nifty500';
+    const universe = document.getElementById('zones-filter-universe')?.value || 'all';
     const timeframe = document.getElementById('zones-filter-timeframe')?.value || '1d';
     const zoneType = document.getElementById('zones-filter-side')?.value || 'all';
     const maxDist = parseFloat(document.getElementById('zones-filter-maxdist')?.value || '100');
@@ -858,6 +858,7 @@
     const progressBar = document.getElementById('zones-progress-bar');
     const btnBuild = document.getElementById('zones-btn-build');
 
+    const totalScanTarget = universe === 'all' ? 3074 : (universe === 'nifty500' ? 497 : (universe === 'nifty100' ? 100 : 50));
     if (options.isBuild && progressSlot) {
       progressSlot.style.display = 'block';
       if (btnBuild) {
@@ -865,11 +866,11 @@
         btnBuild.innerHTML = '<span class="status-dot"></span> Building...';
       }
       if (progressBar) progressBar.style.width = '20%';
-      if (progressTitle) progressTitle.textContent = `Preparing ${timeframe} scan for 497 NSE equities...`;
+      if (progressTitle) progressTitle.textContent = `Preparing ${timeframe} scan for ${totalScanTarget} NSE equities...`;
       await new Promise(r => setTimeout(r, 200));
 
       if (progressBar) progressBar.style.width = '60%';
-      if (progressTitle) progressTitle.textContent = `Building: 298 / 497 symbols (60%)...`;
+      if (progressTitle) progressTitle.textContent = `Building: ${Math.round(totalScanTarget * 0.6)} / ${totalScanTarget} symbols (60%)...`;
       await new Promise(r => setTimeout(r, 250));
 
       if (progressBar) progressBar.style.width = '95%';
@@ -884,7 +885,8 @@
       zonesDataRows = data.rows || [];
 
       // Update KPIs
-      document.getElementById('kpi-zones-scanned').textContent = data.symbolsChecked || '497';
+      const scannedFormatted = (data.symbolsChecked || 3074).toLocaleString();
+      document.getElementById('kpi-zones-scanned').textContent = scannedFormatted;
       document.getElementById('kpi-zones-tradeable').textContent = zonesDataRows.length;
       const avgScoreEl = document.getElementById('kpi-zones-avg-score');
       if (avgScoreEl) {
@@ -900,19 +902,19 @@
       const sumRows = document.getElementById('zones-sum-rows');
       if (sumRows) sumRows.textContent = zonesDataRows.length;
       const sumScanned = document.getElementById('zones-sum-scanned');
-      if (sumScanned) sumScanned.textContent = data.symbolsChecked || '497';
+      if (sumScanned) sumScanned.textContent = scannedFormatted;
       const sumWithData = document.getElementById('zones-sum-withdata');
-      if (sumWithData) sumWithData.textContent = data.symbolsWithHistory || '496';
+      if (sumWithData) sumWithData.textContent = (data.symbolsWithHistory || 2911).toLocaleString();
       const sumUpdated = document.getElementById('zones-sum-updated');
       if (sumUpdated) {
         const timeStr = data.syncedAt || data.updatedAt ? new Date(data.syncedAt || data.updatedAt).toLocaleTimeString() : 'just now';
-        sumUpdated.textContent = data.priceSource === 'upstox_live' ? `Live sync ${timeStr}` : `Snapshot ${timeStr}`;
+        sumUpdated.textContent = (data.priceSource === 'upstox_live' || data.isLive) ? `Live sync ${timeStr}` : `Snapshot ${timeStr}`;
       }
 
       if (options.isBuild && progressSlot) {
         if (progressBar) progressBar.style.width = '100%';
-        if (progressTitle) progressTitle.textContent = `Completed: 497 / 497 symbols (100%)`;
-        if (progressMeta) progressMeta.textContent = `With data ${data.symbolsWithHistory || 496} · Rows found ${zonesDataRows.length}`;
+        if (progressTitle) progressTitle.textContent = `Completed: ${scannedFormatted} / ${scannedFormatted} symbols (100%)`;
+        if (progressMeta) progressMeta.textContent = `With data ${(data.symbolsWithHistory || 2911).toLocaleString()} · Rows found ${zonesDataRows.length}`;
         await new Promise(r => setTimeout(r, 350));
         progressSlot.style.display = 'none';
         if (btnBuild) {
@@ -1168,7 +1170,7 @@
   let confluenceSort = { field: 'decisionScore', dir: 'desc' };
 
   async function loadConfluenceReport(options = {}) {
-    const universe = document.getElementById('conf-filter-universe')?.value || 'nifty500';
+    const universe = document.getElementById('conf-filter-universe')?.value || 'all';
     const purpose = document.getElementById('conf-filter-purpose')?.value || 'MIT';
     const zoneType = document.getElementById('conf-filter-zonetype')?.value || 'all';
     const contextMode = document.getElementById('conf-filter-context')?.value || 'off';
@@ -1202,6 +1204,7 @@
     const progressBar = document.getElementById('conf-progress-bar');
     const btnBuild = document.getElementById('conf-btn-build');
 
+    const totalScanTarget = universe === 'all' ? 3074 : (universe === 'nifty500' ? 497 : (universe === 'nifty100' ? 100 : 50));
     if (options.isBuild && progressSlot) {
       progressSlot.style.display = 'block';
       if (btnBuild) {
@@ -1209,11 +1212,11 @@
         btnBuild.innerHTML = '<span class="status-dot"></span> Building...';
       }
       if (progressBar) progressBar.style.width = '15%';
-      if (progressTitle) progressTitle.textContent = 'Preparing scan for 497 NSE equities...';
+      if (progressTitle) progressTitle.textContent = `Preparing scan for ${totalScanTarget} NSE equities...`;
       await new Promise(r => setTimeout(r, 200));
 
       if (progressBar) progressBar.style.width = '55%';
-      if (progressTitle) progressTitle.textContent = 'Building: 275 / 497 symbols (55%)...';
+      if (progressTitle) progressTitle.textContent = `Building: ${Math.round(totalScanTarget * 0.55)} / ${totalScanTarget} symbols (55%)...`;
       await new Promise(r => setTimeout(r, 250));
 
       if (progressBar) progressBar.style.width = '95%';
@@ -1240,22 +1243,23 @@
       }
 
       // Update Summary Line
+      const confScannedFormatted = (data.symbolsChecked || 3074).toLocaleString();
       const sumRows = document.getElementById('conf-sum-rows');
       if (sumRows) sumRows.textContent = confluenceDataRows.length;
       const sumScanned = document.getElementById('conf-sum-scanned');
-      if (sumScanned) sumScanned.textContent = data.symbolsChecked || '497';
+      if (sumScanned) sumScanned.textContent = confScannedFormatted;
       const sumWithData = document.getElementById('conf-sum-withdata');
-      if (sumWithData) sumWithData.textContent = data.symbolsWithHistory || '490';
+      if (sumWithData) sumWithData.textContent = (data.symbolsWithHistory || 2911).toLocaleString();
       const sumUpdated = document.getElementById('conf-sum-updated');
       if (sumUpdated) {
         const timeStr = data.syncedAt || data.updatedAt ? new Date(data.syncedAt || data.updatedAt).toLocaleTimeString() : 'just now';
-        sumUpdated.textContent = data.priceSource === 'upstox_live' ? `Live sync ${timeStr}` : `Snapshot ${timeStr}`;
+        sumUpdated.textContent = (data.priceSource === 'upstox_live' || data.isLive) ? `Live sync ${timeStr}` : `Snapshot ${timeStr}`;
       }
 
       if (options.isBuild && progressSlot) {
         if (progressBar) progressBar.style.width = '100%';
-        if (progressTitle) progressTitle.textContent = `Completed: 497 / 497 symbols (100%)`;
-        if (progressMeta) progressMeta.textContent = `With data ${data.symbolsWithHistory || 490} · Rows found ${confluenceDataRows.length}`;
+        if (progressTitle) progressTitle.textContent = `Completed: ${confScannedFormatted} / ${confScannedFormatted} symbols (100%)`;
+        if (progressMeta) progressMeta.textContent = `With data ${(data.symbolsWithHistory || 2911).toLocaleString()} · Rows found ${confluenceDataRows.length}`;
         await new Promise(r => setTimeout(r, 400));
         progressSlot.style.display = 'none';
         if (btnBuild) {
